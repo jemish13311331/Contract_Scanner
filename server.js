@@ -1202,4 +1202,11 @@ const startServer = () => {
   });
 };
 
-startServer();
+// Only bind a port when run directly (local dev: `node server.js`, and the smoke
+// tests). On serverless hosts like Vercel the platform imports the exported `app`
+// and invokes it per request, so it must NOT call app.listen() there.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  startServer();
+}
+
+export default app;
