@@ -140,7 +140,8 @@ const CONTRACT_TYPES = [
 ];
 
 // Inline card form rendered inside <Elements>. Confirms the PaymentIntent on
-// the page (no redirect for cards); fulfillment still happens via the webhook.
+// the page (no redirect for cards); fulfillment happens server-side via
+// /api/billing/confirm once the card succeeds.
 function PaymentForm({ plan, priceLabel, onPaid, onCancel }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -172,7 +173,7 @@ function PaymentForm({ plan, priceLabel, onPaid, onCancel }) {
 
   return (
     <form onSubmit={submit} className="pay-form">
-      <PaymentElement options={{ layout: 'tabs' }} />
+      <PaymentElement options={{ layout: 'tabs', wallets: { applePay: 'never', googlePay: 'never' } }} />
       {err ? <div className="feedback error"><span>{err}</span></div> : null}
       <div className="pay-actions">
         <button type="button" className="secondary-button" onClick={onCancel} disabled={busy}>

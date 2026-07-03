@@ -124,7 +124,6 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX
 // Stripe — optional. When unset, checkout falls back to a local mock grant.
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY;
-const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
@@ -167,12 +166,7 @@ const ensureWorker = async () => {
   }
 };
 
-// The Stripe webhook needs the raw request body for signature verification, so
-// JSON parsing must skip it. Everything else gets parsed normally.
-app.use((req, res, next) => {
-  if (req.originalUrl === '/api/stripe/webhook') return next();
-  return express.json()(req, res, next);
-});
+app.use(express.json());
 
 // ============================================================================
 //  Rate limiting
@@ -227,12 +221,8 @@ const analyzeLimiter = rateLimit({
   handler: (_req, res) => rateLimited(res, 'You’re analyzing very quickly. Please wait a bit before submitting another contract.'),
 });
 
-// Apply the global limiter to every API route except the Stripe webhook, which
-// Stripe retries on its own schedule and must never be throttled by IP.
-app.use('/api', (req, res, next) => {
-  if (req.originalUrl === '/api/stripe/webhook') return next();
-  return apiLimiter(req, res, next);
-});
+// Broad safety net across the whole API.
+app.use('/api', apiLimiter);
 
 // ============================================================================
 //  Auth & entitlement helpers
@@ -721,7 +711,10 @@ app.post('/api/billing/payment-intent', authOptional, authRequired, async (req, 
     const intent = await stripe.paymentIntents.create({
       amount: plan.amountCents,
       currency: 'usd',
-      automatic_payment_methods: { enabled: true },
+      // Card only — covers both credit and debit. Explicitly listing the type
+      // (instead of automatic_payment_methods) suppresses Cash App Pay,
+      // Amazon Pay, Link, and every other wallet/redirect method.
+      payment_method_types: ['card'],
       receipt_email: req.user.email,
       description: plan.unlimitedDays ? `Unlimited analyses for ${plan.unlimitedDays} days` : `${plan.credits} contract analyses`,
       // The webhook reads this metadata to fulfill the right plan for the right user.
@@ -733,10 +726,11 @@ app.post('/api/billing/payment-intent', authOptional, authRequired, async (req, 
   }
 });
 
-// Confirm an on-site PaymentIntent and fulfill immediately. This is the PRIMARY
-// fulfillment path after an inline card succeeds; the webhook is an idempotent
-// backstop. We re-fetch the intent from Stripe — never trust the client's claim
-// that it succeeded — and verify it belongs to the authenticated user.
+// Confirm an on-site PaymentIntent and fulfill it. This is the sole fulfillment
+// path after an inline card succeeds. We re-fetch the intent from Stripe — never
+// trust the client's claim that it succeeded — and verify it belongs to the
+// authenticated user. fulfillPurchase is idempotent on the charge id, so a
+// double-submit can't double-credit.
 app.post('/api/billing/confirm', authOptional, authRequired, async (req, res) => {
   const paymentIntentId = req.body?.paymentIntentId;
   if (!paymentIntentId) return res.status(400).json({ error: 'Missing paymentIntentId.' });
@@ -786,6 +780,7 @@ app.post('/api/billing/checkout', authOptional, authRequired, async (req, res) =
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
+      payment_method_types: ['card'], // card only — no wallets or alternative methods
       customer_email: req.user.email,
       client_reference_id: req.user.id,
       line_items: [
@@ -810,48 +805,6 @@ app.post('/api/billing/checkout', authOptional, authRequired, async (req, res) =
     return res.json({ url: session.url });
   } catch (caught) {
     return serverError(res, 'stripe checkout error', caught, { message: 'Could not start checkout. Please try again.' });
-  }
-});
-
-// Stripe webhook — the ONLY place entitlement is granted for real payments.
-app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  if (!stripe || !STRIPE_WEBHOOK_SECRET) return res.status(503).send('Stripe not configured.');
-
-  let event;
-  try {
-    event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], STRIPE_WEBHOOK_SECRET);
-  } catch (caught) {
-    console.error('Webhook signature verification failed:', caught.message);
-    return res.status(400).send('Webhook signature verification failed.');
-  }
-
-  try {
-    // On-site Payment Element flow → PaymentIntent succeeds.
-    if (event.type === 'payment_intent.succeeded') {
-      const intent = event.data.object;
-      const plan = PLAN_CATALOG[intent.metadata?.planId];
-      const userId = intent.metadata?.userId;
-      if (userId && plan) {
-        await fulfillPurchase(userId, plan, { chargeId: intent.id, customerId: intent.customer });
-      }
-    }
-    // Hosted Checkout flow (kept for completeness).
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object;
-      const plan = PLAN_CATALOG[session.metadata?.planId];
-      const userId = session.metadata?.userId || session.client_reference_id;
-      if (userId && plan && session.payment_status === 'paid') {
-        await fulfillPurchase(userId, plan, {
-          chargeId: session.payment_intent || session.id,
-          customerId: session.customer,
-        });
-      }
-    }
-    return res.json({ received: true });
-  } catch (caught) {
-    console.error('Webhook fulfillment error:', caught.message);
-    captureError(caught); // payment fulfillment failure — alert on it
-    return res.status(500).send('Fulfillment error');
   }
 });
 

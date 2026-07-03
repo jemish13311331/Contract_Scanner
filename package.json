@@ -6,7 +6,6 @@
     "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
     "dev:frontend": "vite",
     "dev:backend": "node --watch server.js",
-    "dev:stripe": "stripe listen --forward-to localhost:4000/api/stripe/webhook",
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server.js",

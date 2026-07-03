@@ -93,7 +93,6 @@ describe('smoke: analyze + payment paths', { skip: DB_UP ? false : 'no database 
         OPENAI_API_KEY: 'test-dummy-key',
         STRIPE_SECRET_KEY: '',
         STRIPE_PUBLISHABLE_KEY: '',
-        STRIPE_WEBHOOK_SECRET: '',
         RESEND_API_KEY: '',
         SENTRY_DSN: '',
         FORCE_HTTPS: '',
