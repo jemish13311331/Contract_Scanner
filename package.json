@@ -1,0 +1,46 @@
+{
+  "name": "lease-contract-red-flag-scanner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "dev:frontend": "vite",
+    "dev:backend": "node --watch server.js",
+    "dev:stripe": "stripe listen --forward-to localhost:4000/api/stripe/webhook",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server.js",
+    "test": "node --test test/*.test.mjs",
+    "test:smoke": "node --test test/smoke.test.mjs"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^9.1.1",
+    "@mui/material": "^9.1.2",
+    "@sentry/node": "^10.63.0",
+    "@stripe/react-stripe-js": "^6.6.0",
+    "@stripe/stripe-js": "^9.8.0",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.4",
+    "express-rate-limit": "^7.5.1",
+    "helmet": "^8.2.0",
+    "jsonwebtoken": "^9.0.3",
+    "mammoth": "^1.4.21",
+    "multer": "^2.0.0",
+    "pdfjs-dist": "^6.1.200",
+    "pg": "^8.22.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "resend": "^6.16.0",
+    "stripe": "^22.3.0",
+    "tesseract.js": "^4.1.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^10.0.3",
+    "nodemon": "^3.0.1",
+    "vite": "^5.4.1"
+  }
+}
