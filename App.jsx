@@ -359,8 +359,7 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/billing/config');
-        const data = await res.json();
+        const data = await api('/api/billing/config', { auth: false });
         if (!cancelled && data.publishableKey) setPublishableKey(data.publishableKey);
       } catch {
         /* payments simply unavailable */
@@ -378,9 +377,7 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) throw new Error('expired');
-        const data = await res.json();
+        const data = await api('/api/me');
         if (!cancelled) applyServerUser(data.user);
       } catch {
         if (!cancelled) {
@@ -412,8 +409,7 @@ export default function App() {
       const poll = async () => {
         tries += 1;
         try {
-          const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${t}` } });
-          if (res.ok) applyServerUser((await res.json()).user);
+          applyServerUser((await api('/api/me', { token: t })).user);
         } catch {
           /* ignore; will retry */
         }
@@ -532,11 +528,7 @@ export default function App() {
         authMode === 'signup'
           ? { firstName: authForm.name.trim() || email.split('@')[0], email, password }
           : { email, password };
-      const res = await fetch(path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      const res = await api(path, { method: 'POST', body, auth: false, raw: true });
       const data = await res.json().catch(() => ({}));
 
       // Signup no longer logs in — it triggers email verification.
@@ -576,11 +568,7 @@ export default function App() {
     if (!pendingEmail) return;
     setResendMsg('Sending…');
     try {
-      await fetch('/api/auth/resend-verification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: pendingEmail }),
-      });
+      await api('/api/auth/resend-verification', { method: 'POST', body: { email: pendingEmail }, auth: false, raw: true });
       setResendMsg('Sent — check your inbox. The link expires in 30 minutes.');
     } catch {
       setResendMsg('Could not resend right now. Please try again.');
@@ -618,7 +606,7 @@ export default function App() {
       let pk = publishableKey;
       if (!pk) {
         try {
-          const cfg = await fetch('/api/billing/config').then((r) => r.json());
+          const cfg = await api('/api/billing/config', { auth: false });
           if (cfg.publishableKey) {
             pk = cfg.publishableKey;
             setPublishableKey(cfg.publishableKey);
@@ -630,25 +618,13 @@ export default function App() {
 
       if (pk) {
         // Create a PaymentIntent and open the on-site card form.
-        const res = await fetch('/api/billing/payment-intent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
-          body: JSON.stringify({ plan: plan.id }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Could not start checkout.');
+        const data = await api('/api/billing/payment-intent', { method: 'POST', body: { plan: plan.id }, token: authToken });
         setPayPlan(plan);
         setPayClientSecret(data.clientSecret);
         setPlansOpen(false);
       } else {
         // No Stripe key configured → instant mock grant (local dev).
-        const res = await fetch('/api/billing/checkout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
-          body: JSON.stringify({ plan: plan.id }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Checkout failed.');
+        const data = await api('/api/billing/checkout', { method: 'POST', body: { plan: plan.id }, token: authToken });
         if (data.user) applyServerUser(data.user);
         setPlansOpen(false);
       }
@@ -678,11 +654,7 @@ export default function App() {
     // Primary: confirm + fulfill on the server (re-checked against Stripe).
     if (paymentIntent?.id) {
       try {
-        const res = await fetch('/api/billing/confirm', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
-          body: JSON.stringify({ paymentIntentId: paymentIntent.id }),
-        });
+        const res = await api('/api/billing/confirm', { method: 'POST', body: { paymentIntentId: paymentIntent.id }, token: t, raw: true });
         if (res.ok) {
           const data = await res.json();
           if (data.user) applyServerUser(data.user);
@@ -697,8 +669,7 @@ export default function App() {
     const poll = async () => {
       tries += 1;
       try {
-        const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${t}` } });
-        if (res.ok) applyServerUser((await res.json()).user);
+        applyServerUser((await api('/api/me', { token: t })).user);
       } catch {
         /* retry */
       }
@@ -708,7 +679,27 @@ export default function App() {
   };
 
   // --- Account page ----------------------------------------------------------
-  const authHeaders = () => ({ Authorization: `Bearer ${token}` });
+  // Shared API client: one place for auth headers, JSON encode/decode, and error
+  // handling. Returns parsed JSON and throws Error(data.error) on a non-2xx.
+  // Pass { auth: false } for public endpoints, { token } to use a specific token,
+  // and { raw: true } when the caller needs the Response to branch on status
+  // codes itself (e.g. the 402/403 flows in auth, analyze, and billing).
+  const api = async (path, { method = 'GET', body, auth = true, token: tokenOverride, raw = false } = {}) => {
+    const headers = {};
+    const isJson = body !== undefined && !(body instanceof FormData);
+    if (isJson) headers['Content-Type'] = 'application/json';
+    const bearer = tokenOverride ?? (auth ? token : null);
+    if (bearer) headers.Authorization = `Bearer ${bearer}`;
+    const res = await fetch(path, {
+      method,
+      headers: Object.keys(headers).length ? headers : undefined,
+      body: body === undefined ? undefined : isJson ? JSON.stringify(body) : body,
+    });
+    if (raw) return res;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Request failed.');
+    return data;
+  };
 
   // Fetch one page of saved reports. Kept separate from loadAccount so the pager
   // can reload just the list without re-fetching account stats/billing.
@@ -717,13 +708,10 @@ export default function App() {
     if (!token) return;
     setRecordsBusy(true);
     try {
-      const res = await fetch(`/api/records?page=${page}&pageSize=${RECORDS_PAGE_SIZE}`, { headers: authHeaders() });
-      if (res.ok) {
-        const data = await res.json();
-        setRecords(data.records || []);
-        setRecordsPage(data.pagination?.page || page);
-        setRecordsTotalPages(data.pagination?.totalPages || 1);
-      }
+      const data = await api(`/api/records?page=${page}&pageSize=${RECORDS_PAGE_SIZE}`);
+      setRecords(data.records || []);
+      setRecordsPage(data.pagination?.page || page);
+      setRecordsTotalPages(data.pagination?.totalPages || 1);
     } catch {
       /* keep whatever we have */
     } finally {
@@ -736,18 +724,15 @@ export default function App() {
     setAccountBusy(true);
     try {
       // Run the account fetch and the first records page concurrently.
-      const accP = fetch('/api/account', { headers: authHeaders() });
+      const accP = api('/api/account');
       const recP = loadRecords(1);
-      const accRes = await accP;
-      if (accRes.ok) {
-        const data = await accRes.json();
-        setAccount(data);
-        setProfileForm({
-          firstName: data.user.firstName || '',
-          lastName: data.user.lastName || '',
-          phoneNumber: data.user.phoneNumber || '',
-        });
-      }
+      const data = await accP;
+      setAccount(data);
+      setProfileForm({
+        firstName: data.user.firstName || '',
+        lastName: data.user.lastName || '',
+        phoneNumber: data.user.phoneNumber || '',
+      });
       await recP;
     } catch {
       /* leave whatever we have */
@@ -811,13 +796,7 @@ export default function App() {
     event.preventDefault();
     setProfileMsg('');
     try {
-      const res = await fetch('/api/account', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify(profileForm),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Could not save.');
+      const data = await api('/api/account', { method: 'PATCH', body: profileForm });
       applyServerUser(data.user);
       setAccount((a) => (a ? { ...a, user: data.user } : a));
       setProfileMsg('Saved ✓');
@@ -830,13 +809,7 @@ export default function App() {
     event.preventDefault();
     setPwMsg('');
     try {
-      const res = await fetch('/api/account/password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify(pwForm),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Could not update password.');
+      await api('/api/account/password', { method: 'POST', body: pwForm });
       setPwForm({ currentPassword: '', newPassword: '' });
       setPwMsg('Password updated ✓');
     } catch (caught) {
@@ -846,8 +819,7 @@ export default function App() {
 
   const deleteAccount = async () => {
     try {
-      const res = await fetch('/api/account', { method: 'DELETE', headers: authHeaders() });
-      if (!res.ok) throw new Error('Could not delete account.');
+      await api('/api/account', { method: 'DELETE' });
       setAccountOpen(false);
       logout();
       setHistory([]);
@@ -859,9 +831,7 @@ export default function App() {
   // Reopen a saved (server-side) report.
   const reopenRecord = async (id) => {
     try {
-      const res = await fetch(`/api/records/${id}`, { headers: authHeaders() });
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await api(`/api/records/${id}`);
       setAnalysis(data.report);
       setAccountOpen(false);
       requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
@@ -916,11 +886,7 @@ export default function App() {
         formData.append('leaseText', text);
       }
 
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: formData,
-      });
+      const response = await api('/api/analyze', { method: 'POST', body: formData, raw: true });
 
       // Server says the account is out of analyses → open the paywall.
       if (response.status === 402) {

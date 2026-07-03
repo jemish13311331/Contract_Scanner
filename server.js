@@ -101,8 +101,22 @@ if (IS_PRODUCTION && (!process.env.JWT_SECRET || process.env.JWT_SECRET === DEV_
   process.exit(1);
 }
 const JWT_SECRET = process.env.JWT_SECRET || DEV_JWT_SECRET;
-const FREE_TRIAL_LIMIT = 1;
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+
+// ---- Tunable config (env-overridable; sensible defaults for local dev) ------
+// Parse an integer env var, falling back to a default when it's unset/invalid.
+const envInt = (name, fallback) => {
+  const n = parseInt(process.env[name], 10);
+  return Number.isFinite(n) ? n : fallback;
+};
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+
+const BCRYPT_ROUNDS = envInt('BCRYPT_ROUNDS', 12);          // password hashing cost
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d'; // session token lifetime
+const FREE_TRIAL_LIMIT = envInt('FREE_TRIAL_LIMIT', 1);     // anonymous free analyses
+const MAX_UPLOAD_BYTES = envInt('MAX_UPLOAD_MB', 15) * 1024 * 1024;
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } });
 
 // Stripe — optional. When unset, checkout falls back to a local mock grant.
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
@@ -116,8 +130,8 @@ const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM || 'Contract Scanner <onboarding@resend.dev>';
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
-const VERIFY_TOKEN_TTL_MIN = 30;
-const RESET_TOKEN_TTL_MIN = 30;
+const VERIFY_TOKEN_TTL_MIN = envInt('VERIFY_TOKEN_TTL_MIN', 30);
+const RESET_TOKEN_TTL_MIN = envInt('RESET_TOKEN_TTL_MIN', 30);
 
 // Server-side plan catalog (source of truth for what a purchase grants).
 const PLAN_CATALOG = {
@@ -182,8 +196,8 @@ const rateLimited = (res, message) =>
 // Broad safety net across the whole API — catches runaway clients / scrapers.
 const apiLimiter = rateLimit({
   ...limiterDefaults,
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 300,
+  windowMs: 15 * MINUTE_MS,
+  limit: envInt('API_RATE_LIMIT', 300),
   handler: (_req, res) => rateLimited(res, 'Too many requests. Please slow down and try again shortly.'),
 });
 
@@ -191,8 +205,8 @@ const apiLimiter = rateLimit({
 // `skipSuccessfulRequests` means only failed attempts count toward the cap.
 const authLimiter = rateLimit({
   ...limiterDefaults,
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
+  windowMs: 15 * MINUTE_MS,
+  limit: envInt('AUTH_RATE_LIMIT', 10),
   skipSuccessfulRequests: true,
   handler: (_req, res) => rateLimited(res, 'Too many attempts. Please wait a few minutes before trying again.'),
 });
@@ -201,8 +215,8 @@ const authLimiter = rateLimit({
 // stricter budget keyed per user when signed in.
 const analyzeLimiter = rateLimit({
   ...limiterDefaults,
-  windowMs: 60 * 60 * 1000, // 1 hour
-  limit: 30,
+  windowMs: HOUR_MS,
+  limit: envInt('ANALYZE_RATE_LIMIT', 30),
   keyGenerator: keyByUserOrIp,
   // We normalize IPv6 ourselves in keyByUserOrIp, so silence the built-in IP check.
   validate: { ip: false },
@@ -219,7 +233,7 @@ app.use('/api', (req, res, next) => {
 // ============================================================================
 //  Auth & entitlement helpers
 // ============================================================================
-const signToken = (user) => jwt.sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
+const signToken = (user) => jwt.sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
 // Public-safe view of a user row (never leak password_hash).
 const publicUser = (u) => ({
@@ -369,7 +383,7 @@ app.post('/api/auth/signup', authLimiter, async (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 8 characters.' });
   }
   try {
-    const passwordHash = await bcrypt.hash(password, 12);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const { rows } = await query(
       `INSERT INTO users (first_name, last_name, email, phone_number, password_hash)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
@@ -488,7 +502,7 @@ app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
   try {
     const user = await consumeAuthToken(token, 'reset');
     if (!user) return res.status(400).json({ error: 'This reset link is invalid or has expired.', expired: true });
-    const passwordHash = await bcrypt.hash(password, 12);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     await query(
       'UPDATE users SET password_hash = $1, email_verified = true, updated_at = now() WHERE id = $2',
       [passwordHash, user.id]
@@ -625,7 +639,7 @@ app.post('/api/account/password', authOptional, authRequired, async (req, res) =
   try {
     const ok = await bcrypt.compare(currentPassword, req.user.password_hash);
     if (!ok) return res.status(401).json({ error: 'Current password is incorrect.' });
-    const passwordHash = await bcrypt.hash(newPassword, 12);
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     await query('UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1', [req.user.id, passwordHash]);
     return res.json({ ok: true });
   } catch (caught) {
