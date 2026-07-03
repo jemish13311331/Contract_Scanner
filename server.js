@@ -7,9 +7,12 @@ import * as Sentry from '@sentry/node';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import Stripe from 'stripe';
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import mammoth from 'mammoth';
-import { createWorker } from 'tesseract.js';
+// NOTE: pdfjs-dist and tesseract.js are intentionally NOT imported at the top.
+// pdfjs references DOMMatrix at module-eval time, which crashes on import in
+// serverless runtimes; both are heavy. They're lazy-loaded inside the extraction
+// helpers below so importing this app never crashes and cold starts stay light
+// for non-upload requests (auth, billing, etc.).
 import { execFileSync } from 'child_process';
 import crypto from 'crypto';
 import path from 'path';
@@ -147,6 +150,7 @@ let workerReady = false;
 const ensureWorker = async () => {
   if (!workerReady) {
     if (!workerPromise) {
+      const { createWorker } = await import('tesseract.js'); // lazy: heavy OCR engine
       workerPromise = createWorker({ logger: () => {} });
     }
     worker = await workerPromise;
@@ -949,6 +953,10 @@ const looksLikeReadableText = (text, contractTypeId = 'lease') => {
 };
 
 const extractTextFromPdf = async (buffer) => {
+  // Lazy-load: pdfjs touches DOMMatrix at import time. @napi-rs/canvas provides
+  // that polyfill; loading here (not at top level) keeps a failure contained to
+  // PDF requests instead of crashing the whole serverless function on cold start.
+  const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const loadingTask = getDocument({ data: new Uint8Array(buffer) });
   const pdfDoc = await loadingTask.promise;
   let extractedText = '';
