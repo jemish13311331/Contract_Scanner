@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import HomeWorkOutlinedIcon from '@mui/icons-material/HomeWorkOutlined';
@@ -62,6 +62,57 @@ const FREE_KEY = 'contract-scanner:freeUsed';
 const TOKEN_KEY = 'contract-scanner:token';
 
 const DEFAULT_ENTITLEMENT = { credits: 0, unlimitedUntil: null };
+
+// Renders Google's official "Sign in with Google" button via Google Identity
+// Services (GIS). Loads the GIS script once, then renders the button once both
+// the script and the client id are ready. `onCredential(idToken)` fires when the
+// user completes the Google flow; we keep it in a ref so re-renders don't
+// re-initialize GIS. Renders nothing until a client id is configured.
+function GoogleSignInButton({ clientId, onCredential }) {
+  const holder = useRef(null);
+  const cbRef = useRef(onCredential);
+  cbRef.current = onCredential;
+  const [ready, setReady] = useState(() => !!window.google?.accounts?.id);
+
+  // Load the GIS client script exactly once for the whole app.
+  useEffect(() => {
+    if (window.google?.accounts?.id) { setReady(true); return; }
+    const existing = document.getElementById('gsi-client');
+    if (existing) {
+      existing.addEventListener('load', () => setReady(true));
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.defer = true;
+    s.id = 'gsi-client';
+    s.onload = () => setReady(true);
+    document.head.appendChild(s);
+  }, []);
+
+  // Initialize + render the button once the script and client id are available.
+  useEffect(() => {
+    if (!ready || !clientId || !holder.current || !window.google?.accounts?.id) return;
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: (resp) => resp?.credential && cbRef.current(resp.credential),
+    });
+    holder.current.innerHTML = '';
+    window.google.accounts.id.renderButton(holder.current, {
+      type: 'standard',
+      theme: 'outline',
+      size: 'large',
+      text: 'continue_with',
+      shape: 'rectangular',
+      logo_alignment: 'left',
+      width: 320,
+    });
+  }, [ready, clientId]);
+
+  if (!clientId) return null;
+  return <div ref={holder} className="gsi-holder" />;
+}
 
 // Map the server's user payload onto local entitlement shape.
 const entitlementFromServer = (u) => ({
@@ -239,6 +290,7 @@ export default function App() {
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState('signup');
   const [authForm, setAuthForm] = useState({ name: '', email: '', password: '' });
+  const [googleClientId, setGoogleClientId] = useState(null);
   const [authError, setAuthError] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
   const [pendingEmail, setPendingEmail] = useState(null); // email awaiting verification (shows "check your email")
@@ -364,6 +416,22 @@ export default function App() {
         if (!cancelled && data.publishableKey) setPublishableKey(data.publishableKey);
       } catch {
         /* payments simply unavailable */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Fetch the Google client id so we can render the "Continue with Google" button.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api('/api/auth/config', { auth: false });
+        if (!cancelled && data.googleClientId) setGoogleClientId(data.googleClientId);
+      } catch {
+        /* Google sign-in simply unavailable */
       }
     })();
     return () => {
@@ -563,6 +631,36 @@ export default function App() {
       setAuthBusy(false);
     }
   };
+
+  // Complete a Google sign-in: exchange the GIS credential for our session JWT,
+  // then mirror the success path of submitAuth (set token, apply user, resume a
+  // pending purchase). Stable identity so GoogleSignInButton doesn't re-init GIS.
+  const handleGoogleCredential = useCallback(async (credential) => {
+    setAuthError('');
+    setAuthBusy(true);
+    try {
+      const res = await api('/api/auth/google', { method: 'POST', body: { credential }, auth: false, raw: true });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Google sign-in failed.');
+
+      setToken(data.token);
+      applyServerUser(data.user);
+      setAuthOpen(false);
+
+      if (pendingPlan) {
+        const plan = pendingPlan;
+        setPendingPlan(null);
+        choosePlan(plan, data.token);
+      }
+    } catch (caught) {
+      setAuthError(caught.message);
+    } finally {
+      setAuthBusy(false);
+    }
+    // choosePlan/applyServerUser/api are stable enough for this flow; pendingPlan
+    // is the only value we branch on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPlan]);
 
   // Resend the verification email from the "check your email" screen.
   const resendVerification = async () => {
@@ -1852,6 +1950,14 @@ export default function App() {
                   <h2>{authMode === 'signup' ? 'Sign up to continue' : 'Sign in'}</h2>
                   {pendingPlan ? <p>Sign in to complete your {pendingPlan.name} plan.</p> : <p>Save your reports and manage your subscription.</p>}
                 </div>
+                {googleClientId ? (
+                  <>
+                    <div className="gsi-wrap">
+                      <GoogleSignInButton clientId={googleClientId} onCredential={handleGoogleCredential} />
+                    </div>
+                    <div className="auth-divider"><span>or</span></div>
+                  </>
+                ) : null}
                 {authMode === 'signup' ? (
                   <label className="field">
                     <span>Name</span>
@@ -2712,6 +2818,10 @@ export default function App() {
         }
         .plans-modal { max-width: 880px; }
         .auth-modal { max-width: 420px; display: grid; gap: 14px; }
+        .gsi-wrap { display: flex; justify-content: center; }
+        .gsi-holder { color-scheme: light; }
+        .auth-divider { display: flex; align-items: center; gap: 12px; color: var(--text-3); font-size: 0.8rem; }
+        .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
         .modal-close { position: absolute; top: 16px; right: 16px; }
         .modal-head { margin-bottom: 8px; }
         .modal-kicker {

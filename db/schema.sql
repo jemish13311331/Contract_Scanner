@@ -63,8 +63,10 @@ CREATE TABLE IF NOT EXISTS users (
   last_name          TEXT,
   email              CITEXT      NOT NULL UNIQUE,
   phone_number       TEXT,
-  password_hash      TEXT        NOT NULL,           -- bcrypt/argon2 hash, NOT plaintext
+  password_hash      TEXT,                            -- bcrypt hash; NULL for social (Google) accounts
   email_verified     BOOLEAN     NOT NULL DEFAULT false,  -- set true once the email link is clicked
+  auth_provider      TEXT        NOT NULL DEFAULT 'password',  -- 'password' | 'google'
+  provider_id        TEXT,                            -- provider subject id (Google `sub`); NULL for password accounts
   subscription_type  subscription_type NOT NULL DEFAULT 'free',
 
   -- Entitlement / metering (drives the freemium gate in the app)
@@ -85,6 +87,10 @@ DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
 CREATE TRIGGER trg_users_updated_at
   BEFORE UPDATE ON users
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- One account per (provider, subject). Partial so password rows (NULL) don't collide.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_provider
+  ON users(auth_provider, provider_id) WHERE provider_id IS NOT NULL;
 
 -- ============================================================================
 --  payment_methods  (replaces raw "Saved_Card_Info" — tokenized, PCI-safe)

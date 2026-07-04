@@ -19,6 +19,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 import { Resend } from 'resend';
+import { OAuth2Client } from 'google-auth-library';
 import { query, withTransaction, dbHealthy } from './db/index.js';
 
 dotenv.config();
@@ -71,12 +72,12 @@ app.use(
       useDefaults: true,
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", 'https://js.stripe.com'],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        scriptSrc: ["'self'", 'https://js.stripe.com', 'https://accounts.google.com/gsi/client'],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://accounts.google.com/gsi/style'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
         imgSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'", 'https://api.stripe.com'],
-        frameSrc: ['https://js.stripe.com', 'https://hooks.stripe.com'],
+        connectSrc: ["'self'", 'https://api.stripe.com', 'https://accounts.google.com/gsi/'],
+        frameSrc: ['https://js.stripe.com', 'https://hooks.stripe.com', 'https://accounts.google.com/gsi/'],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         formAction: ["'self'"],
@@ -132,6 +133,12 @@ const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM || 'Contract Scanner <onboarding@resend.dev>';
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
+
+// Google sign-in — optional. When GOOGLE_CLIENT_ID is unset the button is hidden
+// (the /api/auth/config endpoint returns null) and the endpoint returns 503.
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
+
 const VERIFY_TOKEN_TTL_MIN = envInt('VERIFY_TOKEN_TTL_MIN', 30);
 const RESET_TOKEN_TTL_MIN = envInt('RESET_TOKEN_TTL_MIN', 30);
 
@@ -425,6 +432,54 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   } catch (caught) {
     console.error('login error:', caught.message);
     return res.status(500).json({ error: 'Could not sign you in. Please try again.' });
+  }
+});
+
+// Public config the SPA needs before rendering the Google button. Returns null
+// when Google sign-in isn't configured so the frontend simply hides the button.
+app.get('/api/auth/config', (_req, res) => {
+  res.json({ googleClientId: GOOGLE_CLIENT_ID || null });
+});
+
+// Sign in / sign up with Google. The browser sends the GIS credential (an ID
+// token); we verify it against Google, then find-or-create the user and issue
+// our own session JWT — identical to the password login response shape.
+app.post('/api/auth/google', authLimiter, async (req, res) => {
+  if (!googleClient) return res.status(503).json({ error: 'Google sign-in is not configured.' });
+  const credential = req.body?.credential;
+  if (!credential) return res.status(400).json({ error: 'Missing Google credential.' });
+  try {
+    const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID });
+    const payload = ticket.getPayload() || {};
+    const email = payload.email;
+    // Google must have verified the email itself — otherwise it isn't proof of ownership.
+    if (!email || !payload.email_verified) {
+      return res.status(401).json({ error: 'Your Google account email is not verified.' });
+    }
+
+    const { rows } = await query('SELECT * FROM users WHERE email = $1', [email]);
+    let user = rows[0];
+    if (!user) {
+      // Brand-new account: no password, email already proven, provider = google.
+      const ins = await query(
+        `INSERT INTO users (first_name, last_name, email, email_verified, auth_provider, provider_id)
+         VALUES ($1, $2, $3, true, 'google', $4) RETURNING *`,
+        [payload.given_name || email.split('@')[0], payload.family_name || null, email, payload.sub]
+      );
+      user = ins.rows[0];
+    } else if (!user.email_verified) {
+      // Existing password account signing in via Google with the same (Google-
+      // verified) email — safe to mark verified so they're no longer blocked.
+      const upd = await query(
+        'UPDATE users SET email_verified = true, updated_at = now() WHERE id = $1 RETURNING *',
+        [user.id]
+      );
+      user = upd.rows[0];
+    }
+
+    return res.json({ token: signToken(user), user: publicUser(user) });
+  } catch (caught) {
+    return serverError(res, 'google auth', caught, { status: 401, message: 'Could not sign you in with Google.' });
   }
 });
 
