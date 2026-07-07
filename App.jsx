@@ -92,22 +92,36 @@ function GoogleSignInButton({ clientId, onCredential }) {
   }, []);
 
   // Initialize + render the button once the script and client id are available.
+  // GIS needs an explicit pixel width (it can't do %), and its max is 400px — so
+  // we measure the container and clamp, then re-render on resize. This keeps the
+  // button flush with the full-width form fields without overflowing narrow
+  // phone modals (a fixed width would spill past the modal edge < ~360px).
   useEffect(() => {
     if (!ready || !clientId || !holder.current || !window.google?.accounts?.id) return;
+    const el = holder.current;
     window.google.accounts.id.initialize({
       client_id: clientId,
       callback: (resp) => resp?.credential && cbRef.current(resp.credential),
     });
-    holder.current.innerHTML = '';
-    window.google.accounts.id.renderButton(holder.current, {
-      type: 'standard',
-      theme: 'outline',
-      size: 'large',
-      text: 'continue_with',
-      shape: 'rectangular',
-      logo_alignment: 'left',
-      width: 320,
-    });
+    const render = () => {
+      const avail = el.offsetWidth || el.parentElement?.offsetWidth || 300;
+      const width = Math.max(200, Math.min(400, Math.floor(avail)));
+      el.innerHTML = '';
+      window.google.accounts.id.renderButton(el, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: 'continue_with',
+        shape: 'rectangular',
+        logo_alignment: 'center',
+        width,
+      });
+    };
+    render();
+    // Re-render if the container resizes (orientation change, viewport resize).
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(render) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
   }, [ready, clientId]);
 
   if (!clientId) return null;
@@ -868,6 +882,69 @@ export default function App() {
     window.addEventListener('popstate', sync);
     return () => window.removeEventListener('popstate', sync);
   }, []);
+
+  // Per-route document head — keeps title / description / canonical accurate for
+  // the standalone routes so /privacy and /terms index as their own pages, and
+  // the private routes (account, auth) stay out of search results. Complements the
+  // static tags in index.html for crawlers that execute JS.
+  useEffect(() => {
+    const SITE = 'https://contractscanner.express';
+    const view = accountOpen ? '/account' : path;
+    const meta = {
+      '/privacy': {
+        title: 'Privacy Policy — Contract Red-Flag Scanner',
+        description: 'How Contract Red-Flag Scanner collects, uses, and protects your data when you analyze a contract.',
+        canonical: `${SITE}/privacy`,
+        index: true,
+      },
+      '/terms': {
+        title: 'Terms of Service — Contract Red-Flag Scanner',
+        description: 'The terms that govern your use of Contract Red-Flag Scanner, including the informational-only disclaimer.',
+        canonical: `${SITE}/terms`,
+        index: true,
+      },
+    }[view] || (view === '/'
+      ? {
+          title: 'Contract Red-Flag Scanner — Leases, Employment, Property & More',
+          description: 'AI contract red-flag scanner for leases, employment offers, property purchase agreements, and any contract — plain-English risk analysis and negotiation prompts.',
+          canonical: `${SITE}/`,
+          index: true,
+        }
+      : {
+          // /account, /verify-email, /forgot-password, /reset-password — private; keep out of the index.
+          title: 'Contract Red-Flag Scanner',
+          description: 'AI contract red-flag scanner — plain-English risk analysis and negotiation prompts.',
+          canonical: null,
+          index: false,
+        });
+
+    document.title = meta.title;
+
+    const desc = document.head.querySelector('meta[name="description"]');
+    if (desc) desc.setAttribute('content', meta.description);
+
+    let canonical = document.head.querySelector('link[rel="canonical"]');
+    if (meta.canonical) {
+      if (!canonical) {
+        canonical = document.createElement('link');
+        canonical.rel = 'canonical';
+        document.head.appendChild(canonical);
+      }
+      canonical.href = meta.canonical;
+    } else if (canonical) {
+      canonical.remove();
+    }
+
+    let robots = document.head.querySelector('meta[name="robots"]');
+    if (!robots) {
+      robots = document.createElement('meta');
+      robots.name = 'robots';
+      document.head.appendChild(robots);
+    }
+    robots.content = meta.index
+      ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
+      : 'noindex, nofollow';
+  }, [path, accountOpen]);
 
   // Client-side navigation for the standalone routes (legal pages, home).
   const navigate = (to) => {
@@ -2818,8 +2895,8 @@ export default function App() {
         }
         .plans-modal { max-width: 880px; }
         .auth-modal { max-width: 420px; display: grid; gap: 14px; }
-        .gsi-wrap { display: flex; justify-content: center; }
-        .gsi-holder { color-scheme: light; }
+        .gsi-wrap { display: flex; justify-content: center; width: 100%; }
+        .gsi-holder { color-scheme: light; width: 100%; display: flex; justify-content: center; min-height: 40px; }
         .auth-divider { display: flex; align-items: center; gap: 12px; color: var(--text-3); font-size: 0.8rem; }
         .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
         .modal-close { position: absolute; top: 16px; right: 16px; }
@@ -3154,6 +3231,15 @@ export default function App() {
           .upload-button { justify-content: center; }
           .feature-pill { font-size: 0.78rem; }
           .textarea-shell textarea { min-height: 220px; }
+        }
+
+        /* --- Small phones: give the header's account controls their own row so
+               they don't crowd the brand, and keep the name from pushing wide. --- */
+        @media (max-width: 480px) {
+          .topbar { gap: 10px; }
+          .account { width: 100%; justify-content: flex-start; }
+          .usage-pill { flex: 0 0 auto; }
+          .user-chip { max-width: 130px; }
         }
 
         /* --- Touch devices: enforce 44px minimum hit area (Apple HIG) --- */

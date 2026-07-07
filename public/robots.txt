@@ -1,0 +1,13 @@
+# robots.txt — Contract Red-Flag Scanner
+# Allow all crawlers to index public pages.
+User-agent: *
+Allow: /
+
+# Keep authenticated / transactional routes out of the index.
+Disallow: /account
+Disallow: /verify-email
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /api/
+
+Sitemap: https://contractscanner.express/sitemap.xml
