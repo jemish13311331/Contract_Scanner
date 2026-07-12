@@ -21,6 +21,7 @@ import { existsSync } from 'fs';
 import { Resend } from 'resend';
 import { OAuth2Client } from 'google-auth-library';
 import { query, withTransaction, dbHealthy } from './db/index.js';
+import { chunkText, MAX_LEASE_CHARS } from './lib/chunk-text.js';
 
 dotenv.config();
 
@@ -877,7 +878,8 @@ const extractJson = (raw) => {
   return JSON.parse(trimmed.slice(first, last + 1));
 };
 
-const MAX_LEASE_CHARS = 18000;
+// MAX_LEASE_CHARS is imported from ./lib/chunk-text.js (the overall input
+// ceiling shared with the chunker).
 
 // Each contract type defines who we protect, what to scrutinize, and a
 // keyword heuristic used to sanity-check the uploaded text.
@@ -987,6 +989,152 @@ const extractTextFromImage = async (buffer) => {
   return compactLeaseText(text);
 };
 
+const ANALYSIS_MODEL = 'gpt-4.1-mini';
+// Bound on chunk analyses in flight at once — keeps us under OpenAI rate limits
+// and inside the per-call timeout without serializing the whole document.
+const MAP_CONCURRENCY = 4;
+const RISK_RANK = { green: 0, yellow: 1, red: 2 };
+
+// Run an async fn over items with at most `limit` in flight; preserves order.
+const mapWithConcurrency = async (items, limit, fn) => {
+  const out = new Array(items.length);
+  let cursor = 0;
+  const runners = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (true) {
+        const idx = cursor;
+        cursor += 1;
+        if (idx >= items.length) return;
+        out[idx] = await fn(items[idx], idx);
+      }
+    }
+  );
+  await Promise.all(runners);
+  return out;
+};
+
+// One OpenAI JSON-mode call. Returns the raw text + finish_reason; throws only
+// on transport/HTTP errors (callers decide how to treat a truncated body).
+const callOpenAIJson = async (messages, model, maxTokens) => {
+  const response = await fetchWithTimeout(OPENAI_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      max_tokens: maxTokens,
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+    }),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`OpenAI API error ${response.status}: ${body}`);
+  }
+  const data = await response.json();
+  const choice = data.choices?.[0];
+  return { text: choice?.message?.content || '', finishReason: choice?.finish_reason };
+};
+
+// Map step: analyze ONE chunk. Clause text is quoted verbatim from the source —
+// we never summarize before analyzing, since the exact wording is where red
+// flags live. Never throws on expected failures (truncation / upstream / parse):
+// returns a { failed, truncated } marker so a single bad chunk can't sink the
+// whole document.
+const analyzeChunk = async (chunk, contractCfg, model) => {
+  const messages = [
+    {
+      role: 'system',
+      content: `You are a meticulous contract analyzer specializing in ${contractCfg.analyst}. You review strictly on behalf of the ${contractCfg.audience} and flag anything unfair, risky, or non-standard for them. Return ONLY valid JSON in the response body. Use only the exact JSON shape requested with no extra text.`,
+    },
+    {
+      role: 'user',
+      content: `Analyze this section of a ${contractCfg.label} on behalf of the ${contractCfg.audience}. Pay special attention to: ${contractCfg.focus}. For each notable clause, set riskLevel to "red" (clearly unfavorable/risky), "yellow" (worth reviewing/negotiating), or "green" (standard/fair), give a plain-English summary, and where useful a short negotiationScript the ${contractCfg.audience} could say. Quote each clause "text" verbatim from the section. In "missingProtections", list protections a fair ${contractCfg.label} should include for the ${contractCfg.audience} but this section omits.\n\nReturn JSON exactly in this shape:\n{\n  "clauses": [\n    {"text": string, "riskLevel": "green"|"yellow"|"red", "summary": string, "negotiationScript"?: string}\n  ],\n  "missingProtections": [string],\n  "overallSummary": {"verdict": string, "topFixes": [string]}\n}\n\nContract section text:\n${chunk}`,
+    },
+  ];
+
+  let result;
+  try {
+    result = await callOpenAIJson(messages, model, 4000);
+  } catch (caught) {
+    console.error(`Chunk analysis request failed: ${caught.message}`);
+    return { failed: true, truncated: false, clauses: [], missingProtections: [] };
+  }
+
+  try {
+    const parsed = extractJson(result.text);
+    return {
+      failed: false,
+      truncated: result.finishReason === 'length',
+      clauses: Array.isArray(parsed.clauses) ? parsed.clauses : [],
+      missingProtections: Array.isArray(parsed.missingProtections) ? parsed.missingProtections : [],
+      overallSummary: parsed.overallSummary || { verdict: '', topFixes: [] },
+    };
+  } catch (parseErr) {
+    console.error(
+      `Chunk analysis JSON parse failed: ${parseErr.message} | finish_reason=${result.finishReason} | rawLength=${result.text.length}`
+    );
+    return { failed: true, truncated: result.finishReason === 'length', clauses: [], missingProtections: [] };
+  }
+};
+
+// Merge clauses from all chunks and drop the duplicates that chunk overlap
+// creates. When two copies disagree on risk, keep the more severe one.
+const mergeClauses = (clauses) => {
+  const byText = new Map();
+  for (const c of clauses) {
+    if (!c || typeof c.text !== 'string') continue;
+    const key = c.text.replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!key) continue;
+    const existing = byText.get(key);
+    if (!existing || (RISK_RANK[c.riskLevel] ?? -1) > (RISK_RANK[existing.riskLevel] ?? -1)) {
+      byText.set(key, c);
+    }
+  }
+  return Array.from(byText.values());
+};
+
+// Reduce step: a whole-document pass over just the merged clauses (small
+// payload, not the full text) to produce document-wide missingProtections and
+// an overall verdict. Falls back to a union of the per-chunk results if the
+// call fails, so we always return something coherent.
+const reduceAnalysis = async (clauses, chunkResults, contractCfg, model) => {
+  const fallback = () => ({
+    missingProtections: Array.from(new Set(chunkResults.flatMap((r) => r.missingProtections || []))),
+    overallSummary:
+      chunkResults.find((r) => r.overallSummary?.verdict)?.overallSummary || { verdict: '', topFixes: [] },
+  });
+
+  const clauseDigest = clauses.map((c) => ({ riskLevel: c.riskLevel, summary: c.summary }));
+  const messages = [
+    {
+      role: 'system',
+      content: `You are a meticulous contract analyzer specializing in ${contractCfg.analyst}, reviewing strictly on behalf of the ${contractCfg.audience}. Return ONLY valid JSON.`,
+    },
+    {
+      role: 'user',
+      content: `Below are the analyzed clauses of a ${contractCfg.label}, reviewed on behalf of the ${contractCfg.audience}. Considering the document as a whole, list the protections a fair ${contractCfg.label} should include for the ${contractCfg.audience} but this one omits ("missingProtections"), and give an overall verdict with the top fixes. Pay special attention to: ${contractCfg.focus}.\n\nReturn JSON exactly in this shape:\n{\n  "missingProtections": [string],\n  "overallSummary": {"verdict": string, "topFixes": [string]}\n}\n\nAnalyzed clauses (JSON):\n${JSON.stringify(clauseDigest)}`,
+    },
+  ];
+
+  try {
+    const result = await callOpenAIJson(messages, model, 1500);
+    const parsed = extractJson(result.text);
+    const fb = fallback();
+    return {
+      missingProtections: Array.isArray(parsed.missingProtections) ? parsed.missingProtections : fb.missingProtections,
+      overallSummary: parsed.overallSummary || fb.overallSummary,
+    };
+  } catch (caught) {
+    console.error(`Reduce analysis failed, using per-chunk fallback: ${caught.message}`);
+    return fallback();
+  }
+};
+
 app.post('/api/analyze', authOptional, analyzeLimiter, upload.single('leaseFile'), async (req, res) => {
   if (!OPENAI_API_KEY) {
     return res.status(500).json({ error: 'Server missing OPENAI_API_KEY. Set it in .env.' });
@@ -1047,68 +1195,60 @@ app.post('/api/analyze', authOptional, analyzeLimiter, upload.single('leaseFile'
   }
 
   try {
-    const messages = [
-      {
-        role: 'system',
-        content: `You are a meticulous contract analyzer specializing in ${contractCfg.analyst}. You review strictly on behalf of the ${contractCfg.audience} and flag anything unfair, risky, or non-standard for them. Return ONLY valid JSON in the response body. Use only the exact JSON shape requested with no extra text.`,
-      },
-      {
-        role: 'user',
-        content: `Analyze this ${contractCfg.label} on behalf of the ${contractCfg.audience}. Pay special attention to: ${contractCfg.focus}. For each notable clause, set riskLevel to "red" (clearly unfavorable/risky), "yellow" (worth reviewing/negotiating), or "green" (standard/fair), give a plain-English summary, and where useful a short negotiationScript the ${contractCfg.audience} could say. In "missingProtections", list protections a fair ${contractCfg.label} should include for the ${contractCfg.audience} but this one omits.\n\nReturn JSON exactly in this shape:\n{\n  \"clauses\": [\n    {\"text\": string, \"riskLevel\": \"green\"|\"yellow\"|\"red\", \"summary\": string, \"negotiationScript\"?: string}\n  ],\n  \"missingProtections\": [string],\n  \"overallSummary\": {\"verdict\": string, \"topFixes\": [string]}\n}\n\nContract text:\n${leaseText}`,
-      },
-    ];
+    const model = ANALYSIS_MODEL;
 
-    const model = 'gpt-4.1-mini';
-    const response = await fetchWithTimeout(OPENAI_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        // Roomy budget so multi-clause contracts don't get truncated mid-JSON.
-        max_tokens: 4000,
-        temperature: 0.2,
-        // Ask the API to guarantee a syntactically valid JSON object.
-        response_format: { type: 'json_object' },
-      }),
-    });
+    // Partition the contract into analysis-sized blocks (verbatim, not
+    // summarized) so the WHOLE document is covered — no silent tail-drop — and
+    // each block's JSON output stays inside the token budget.
+    const chunks = chunkText(leaseText);
 
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`OpenAI API error ${response.status}: ${body}`);
-    }
+    // Map: analyze every chunk in parallel (bounded concurrency). A single bad
+    // chunk returns a marker instead of throwing, so it can't sink the request.
+    const chunkResults = await mapWithConcurrency(
+      chunks,
+      MAP_CONCURRENCY,
+      (chunk) => analyzeChunk(chunk, contractCfg, model)
+    );
 
-    const data = await response.json();
-    const choice = data.choices?.[0];
-    const modelText = choice?.message?.content || '';
-
-    // The model can still overflow the token budget on very long contracts. If
-    // parsing fails, return a friendly, actionable message — never leak the raw
-    // JSON.parse error (e.g. "Expected ',' ... at position 3993") to the user.
-    let parsed;
-    try {
-      parsed = extractJson(modelText);
-    } catch (parseErr) {
-      const truncated = choice?.finish_reason === 'length';
-      console.error(
-        `Analysis JSON parse failed: ${parseErr.message} | finish_reason=${choice?.finish_reason} | rawLength=${modelText.length}`
-      );
+    const ok = chunkResults.filter((r) => r && !r.failed);
+    if (ok.length === 0) {
+      // Every chunk failed to yield usable JSON (truncation / upstream error).
+      const anyTruncated = chunkResults.some((r) => r && r.truncated);
       return res.status(502).json({
-        error: truncated
+        error: anyTruncated
           ? 'This contract is long, so the analysis was cut off before it finished. Try analyzing one agreement (or a shorter section) at a time.'
           : 'We couldn’t read the analysis result this time. Please try again in a moment.',
         retryable: true,
       });
     }
 
+    // Reduce: merge clauses across chunks and drop overlap duplicates.
+    const clauses = mergeClauses(ok.flatMap((r) => r.clauses || []));
+
+    // A single chunk has nothing to reconcile — reuse its own document-wide
+    // fields and skip the extra call. Multiple chunks get a whole-document pass.
+    let missingProtections;
+    let overallSummary;
+    if (ok.length === 1) {
+      missingProtections = ok[0].missingProtections || [];
+      overallSummary = ok[0].overallSummary || { verdict: '', topFixes: [] };
+    } else {
+      const reduced = await reduceAnalysis(clauses, ok, contractCfg, model);
+      missingProtections = reduced.missingProtections;
+      overallSummary = reduced.overallSummary;
+    }
+
+    const parsed = { clauses, missingProtections, overallSummary };
+
     // Surface processing facts to the client (so it can warn about truncation, etc.)
+    const truncatedChunks = chunkResults.filter((r) => !r || r.failed || r.truncated).length;
     parsed.meta = {
       model,
       charCount: leaseText.length,
-      truncated: leaseText.length >= MAX_LEASE_CHARS,
+      chunkCount: chunks.length,
+      truncatedChunks,
+      // Back-compat: the SPA still reads `truncated` to warn the user.
+      truncated: truncatedChunks > 0,
       source: req.file ? req.file.mimetype : 'pasted-text',
       contractType: contractTypeId,
       contractTypeLabel: contractCfg.label,

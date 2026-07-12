@@ -1596,9 +1596,9 @@ export default function App() {
               rows={15}
             />
             <div className="textarea-foot">
-              <span className={leaseText.length > 18000 ? 'count over' : 'count'}>
+              <span className={leaseText.length > 120000 ? 'count over' : 'count'}>
                 {leaseText.length.toLocaleString()} chars
-                {leaseText.length > 18000 ? ' · only the first 18,000 are analyzed' : ''}
+                {leaseText.length > 120000 ? ' · only the first 120,000 are analyzed' : ''}
               </span>
               <span className="kbd-hint"><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>Enter</kbd> to analyze</span>
             </div>
@@ -1737,7 +1737,7 @@ export default function App() {
           {analysis.meta?.truncated ? (
             <div className="notice">
               <WarningAmberOutlinedIcon fontSize="small" />
-              <span>This contract was long, so only the first ~18,000 characters were analyzed. For full coverage, split it and run the remainder separately.</span>
+              <span>This contract is very long, so one or more sections couldn’t be fully analyzed and a few clauses may be missing. For complete coverage, try running the affected section on its own.</span>
             </div>
           ) : null}
 
