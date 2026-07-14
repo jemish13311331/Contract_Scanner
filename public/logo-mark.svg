@@ -2,47 +2,47 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Contract Scanner">
   <defs>
     <linearGradient id="tile" x1="0.2" y1="0" x2="0.8" y2="1">
-      <stop offset="0%" stop-color="#f4faf9"/>
-      <stop offset="55%" stop-color="#e9f4f1"/>
-      <stop offset="100%" stop-color="#d8ebe6"/>
+      <stop offset="0%" stop-color="#fffdf6"/>
+      <stop offset="55%" stop-color="#fdf4e4"/>
+      <stop offset="100%" stop-color="#f6e7cf"/>
     </linearGradient>
     <radialGradient id="backglow" cx="34%" cy="22%" r="72%">
-      <stop offset="0%" stop-color="#14c7b3" stop-opacity="0.20"/>
-      <stop offset="100%" stop-color="#0d9488" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#fbcf5a" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="vignette" cx="50%" cy="44%" r="62%">
-      <stop offset="58%" stop-color="#0f766e" stop-opacity="0"/>
-      <stop offset="100%" stop-color="#0f766e" stop-opacity="0.10"/>
+      <stop offset="58%" stop-color="#7a4400" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#7a4400" stop-opacity="0.10"/>
     </radialGradient>
     <linearGradient id="bevel" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
       <stop offset="45%" stop-color="#ffffff" stop-opacity="0"/>
-      <stop offset="100%" stop-color="#0f766e" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#7a4400" stop-opacity="0.16"/>
     </linearGradient>
     <!-- torus ring shading (directional light top-left) -->
     <linearGradient id="ring" x1="0.1" y1="0" x2="0.9" y2="1">
-      <stop offset="0%" stop-color="#7fe9dd"/>
-      <stop offset="42%" stop-color="#12b3a3"/>
-      <stop offset="100%" stop-color="#115e58"/>
+      <stop offset="0%" stop-color="#ffe6a3"/>
+      <stop offset="42%" stop-color="#f5a623"/>
+      <stop offset="100%" stop-color="#8a4b00"/>
     </linearGradient>
     <linearGradient id="handle" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#5eead4"/>
-      <stop offset="100%" stop-color="#0f766e"/>
+      <stop offset="0%" stop-color="#fde08a"/>
+      <stop offset="100%" stop-color="#c2740a"/>
     </linearGradient>
     <!-- glass dome -->
     <radialGradient id="glass" cx="36%" cy="30%" r="80%">
       <stop offset="0%" stop-color="#ffffff" stop-opacity="0.85"/>
       <stop offset="30%" stop-color="#ffffff" stop-opacity="0.12"/>
-      <stop offset="72%" stop-color="#0a1f1c" stop-opacity="0.06"/>
-      <stop offset="100%" stop-color="#02110f" stop-opacity="0.45"/>
+      <stop offset="72%" stop-color="#2a1c08" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#1a1004" stop-opacity="0.45"/>
     </radialGradient>
     <linearGradient id="lens" x1="0.3" y1="0" x2="0.7" y2="1">
       <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="#dce6e1"/>
+      <stop offset="100%" stop-color="#f2e8d6"/>
     </linearGradient>
     <linearGradient id="page" x1="0.2" y1="0" x2="0.8" y2="1">
       <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="#c4cfc9"/>
+      <stop offset="100%" stop-color="#e6dcc6"/>
     </linearGradient>
     <linearGradient id="risk" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%" stop-color="#ff6b83"/>
@@ -64,82 +64,82 @@
 
   <g transform="translate(128 130) scale(1.07) translate(-128 -130)">
     <!-- document contact shadow -->
-    <ellipse cx="112" cy="188" rx="66" ry="16" fill="#0f2a26" fill-opacity="0.16" filter="url(#blur7)"/>
+    <ellipse cx="112" cy="188" rx="66" ry="16" fill="#2a1c0f" fill-opacity="0.16" filter="url(#blur7)"/>
 
     <!-- Contract page stack (3D thickness) -->
     <g transform="rotate(-7 108 116)">
       <!-- stacked sheets — each with its own edge stroke so the thickness reads -->
-      <rect x="67" y="59" width="100" height="128" rx="12" fill="#bcc6c0" stroke="#9fa9a3" stroke-width="1"/>
-      <rect x="63" y="55" width="100" height="128" rx="12" fill="#ccd6d0" stroke="#aab4ae" stroke-width="1"/>
-      <rect x="60" y="52" width="100" height="128" rx="12" fill="#dde6e1" stroke="#b6c0ba" stroke-width="1"/>
-      <rect x="58" y="50" width="100" height="128" rx="12" fill="url(#page)" stroke="#8a958f" stroke-width="1.6"/>
+      <rect x="67" y="59" width="100" height="128" rx="12" fill="#cabfa8" stroke="#ab9f86" stroke-width="1"/>
+      <rect x="63" y="55" width="100" height="128" rx="12" fill="#d8cdb6" stroke="#b6aa90" stroke-width="1"/>
+      <rect x="60" y="52" width="100" height="128" rx="12" fill="#e6dcc6" stroke="#c2b69c" stroke-width="1"/>
+      <rect x="58" y="50" width="100" height="128" rx="12" fill="url(#page)" stroke="#988c72" stroke-width="1.6"/>
       <!-- top-left edge highlight + bottom-right edge shadow (bevel/thickness) -->
       <path d="M64 51 H150 M59 56 V172" stroke="#ffffff" stroke-opacity="0.85" stroke-width="2" stroke-linecap="round" fill="none"/>
-      <path d="M156 60 V172 M70 176 H150" stroke="#6b766f" stroke-opacity="0.7" stroke-width="3.4" stroke-linecap="round" fill="none"/>
+      <path d="M156 60 V172 M70 176 H150" stroke="#7a6f58" stroke-opacity="0.7" stroke-width="3.4" stroke-linecap="round" fill="none"/>
       <!-- dog-ear fold, more defined -->
-      <path d="M136 50 L158 50 L158 72 Z" fill="#cad4ce"/>
-      <path d="M136 50 L158 72" stroke="#8a958f" stroke-opacity="0.6" stroke-width="1.4"/>
-      <path d="M136 50 L136 72 L158 72" fill="none" stroke="#7f8a84" stroke-width="2.4"/>
+      <path d="M136 50 L158 50 L158 72 Z" fill="#d6cbb3"/>
+      <path d="M136 50 L158 72" stroke="#988c72" stroke-opacity="0.6" stroke-width="1.4"/>
+      <path d="M136 50 L136 72 L158 72" fill="none" stroke="#8d8168" stroke-width="2.4"/>
       <!-- ruled text lines — darker for contrast, each with a faint baseline shadow -->
       <g stroke-linecap="round">
         <path d="M72 81 H144" stroke="#ffffff" stroke-opacity="0.85" stroke-width="6"/>
-        <path d="M72 80 H144" stroke="#2c3733" stroke-width="6"/>
-        <path d="M72 98 H128" stroke="#48544e" stroke-width="6"/>
+        <path d="M72 80 H144" stroke="#3a3226" stroke-width="6"/>
+        <path d="M72 98 H128" stroke="#574c3b" stroke-width="6"/>
         <path d="M72 116 H144" stroke="url(#risk)" stroke-width="7.5"/>
         <circle cx="64" cy="116" r="5.5" fill="#d1103a"/>
-        <path d="M72 134 H124" stroke="#48544e" stroke-width="6"/>
-        <path d="M72 152 H138" stroke="#48544e" stroke-width="6"/>
+        <path d="M72 134 H124" stroke="#574c3b" stroke-width="6"/>
+        <path d="M72 152 H138" stroke="#574c3b" stroke-width="6"/>
       </g>
     </g>
 
     <!-- magnifier group (nudged toward center) -->
     <g transform="translate(-13 -9)">
     <!-- magnifier cast shadow + contact AO where lens meets the page -->
-    <ellipse cx="168" cy="168" rx="58" ry="50" fill="#0f2a26" fill-opacity="0.22" filter="url(#blur7)"/>
-    <path d="M156 92 A58 58 0 0 0 156 208" fill="none" stroke="#0f2a26" stroke-opacity="0.16" stroke-width="9" stroke-linecap="round" filter="url(#blur4)"/>
-    <!-- teal glow radiating from the ring -->
-    <circle cx="156" cy="150" r="66" fill="#0d9488" fill-opacity="0.10" filter="url(#blur7)"/>
+    <ellipse cx="168" cy="168" rx="58" ry="50" fill="#2a1c0f" fill-opacity="0.22" filter="url(#blur7)"/>
+    <path d="M156 92 A58 58 0 0 0 156 208" fill="none" stroke="#2a1c0f" stroke-opacity="0.16" stroke-width="9" stroke-linecap="round" filter="url(#blur4)"/>
+    <!-- gold glow radiating from the ring -->
+    <circle cx="156" cy="150" r="66" fill="#f59e0b" fill-opacity="0.12" filter="url(#blur7)"/>
 
     <!-- 3D handle: drawn BEHIND the ring so it tucks under the rim and reads as joined -->
-    <line x1="178" y1="172" x2="224" y2="218" stroke="#0f3f3a" stroke-width="22" stroke-linecap="round"/>
+    <line x1="178" y1="172" x2="224" y2="218" stroke="#7a4a08" stroke-width="22" stroke-linecap="round"/>
     <line x1="180" y1="174" x2="224" y2="218" stroke="url(#handle)" stroke-width="20" stroke-linecap="round"/>
-    <line x1="202" y1="196" x2="219" y2="213" stroke="#d7fff1" stroke-opacity="0.6" stroke-width="5" stroke-linecap="round"/>
+    <line x1="202" y1="196" x2="219" y2="213" stroke="#fff3d1" stroke-opacity="0.6" stroke-width="5" stroke-linecap="round"/>
 
     <!-- Lens paper + magnified content -->
     <clipPath id="lensClip"><circle cx="156" cy="150" r="47"/></clipPath>
     <g clip-path="url(#lensClip)">
       <circle cx="156" cy="150" r="47" fill="url(#lens)"/>
-      <path d="M128 130 H190" stroke="#7a857f" stroke-width="7" stroke-linecap="round"/>
+      <path d="M128 130 H190" stroke="#8a7f68" stroke-width="7" stroke-linecap="round"/>
       <path d="M132 152 H188" stroke="url(#risk)" stroke-width="11" stroke-linecap="round"/>
       <circle cx="122" cy="152" r="7" fill="#d1103a"/>
-      <path d="M128 176 H182" stroke="#7a857f" stroke-width="7" stroke-linecap="round"/>
+      <path d="M128 176 H182" stroke="#8a7f68" stroke-width="7" stroke-linecap="round"/>
       <!-- glass dome shading + crisp reflection -->
       <circle cx="156" cy="150" r="47" fill="url(#glass)"/>
-      <path d="M196 168 A47 47 0 0 1 150 196" fill="none" stroke="#02140f" stroke-opacity="0.35" stroke-width="14" stroke-linecap="round" filter="url(#blur4)"/>
+      <path d="M196 168 A47 47 0 0 1 150 196" fill="none" stroke="#241605" stroke-opacity="0.35" stroke-width="14" stroke-linecap="round" filter="url(#blur4)"/>
       <path d="M126 142 A47 47 0 0 1 170 116" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="7" stroke-linecap="round" filter="url(#blur4)"/>
       <ellipse cx="140" cy="130" rx="10" ry="5.5" fill="#ffffff" fill-opacity="0.9" transform="rotate(-32 140 130)"/>
     </g>
 
     <!-- Torus ring: dark tube edges + lit body + rounding bands + specular -->
-    <circle cx="156" cy="150" r="57" fill="none" stroke="#06322e" stroke-width="3"/>
-    <circle cx="156" cy="150" r="47" fill="none" stroke="#06322e" stroke-width="3"/>
+    <circle cx="156" cy="150" r="57" fill="none" stroke="#5a3a08" stroke-width="3"/>
+    <circle cx="156" cy="150" r="47" fill="none" stroke="#5a3a08" stroke-width="3"/>
     <circle cx="156" cy="150" r="52" fill="none" stroke="url(#ring)" stroke-width="15"/>
-    <circle cx="156" cy="150" r="49" fill="none" stroke="#7fe9dd" stroke-opacity="0.32" stroke-width="4"/>
-    <circle cx="156" cy="150" r="55.5" fill="none" stroke="#0a3d38" stroke-opacity="0.55" stroke-width="4"/>
-    <path d="M120 128 A52 52 0 0 1 158 96" fill="none" stroke="#d7fff1" stroke-opacity="0.9" stroke-width="4" stroke-linecap="round"/>
-    <path d="M190 176 A52 52 0 0 1 150 202" fill="none" stroke="#04231f" stroke-opacity="0.5" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="156" cy="150" r="49" fill="none" stroke="#ffe6a3" stroke-opacity="0.32" stroke-width="4"/>
+    <circle cx="156" cy="150" r="55.5" fill="none" stroke="#63410a" stroke-opacity="0.55" stroke-width="4"/>
+    <path d="M120 128 A52 52 0 0 1 158 96" fill="none" stroke="#fff3d1" stroke-opacity="0.9" stroke-width="4" stroke-linecap="round"/>
+    <path d="M190 176 A52 52 0 0 1 150 202" fill="none" stroke="#3d2705" stroke-opacity="0.5" stroke-width="5" stroke-linecap="round"/>
     <circle cx="126" cy="123" r="3.4" fill="#ffffff" fill-opacity="0.9"/>
     </g>
   </g>
 
   <!-- 3D alert badge (sphere) -->
   <circle cx="194" cy="64" r="30" fill="#ff2b50" fill-opacity="0.18" filter="url(#blur7)"/>
-  <ellipse cx="198" cy="74" rx="20" ry="7" fill="#0f2a26" fill-opacity="0.22" filter="url(#blur4)"/>
+  <ellipse cx="198" cy="74" rx="20" ry="7" fill="#2a1c0f" fill-opacity="0.22" filter="url(#blur4)"/>
   <circle cx="194" cy="64" r="20" fill="url(#badge)" stroke="#ffffff" stroke-width="3"/>
   <ellipse cx="187" cy="56" rx="6.5" ry="4.5" fill="#ffffff" fill-opacity="0.75" transform="rotate(-30 187 56)"/>
 
   <rect width="256" height="256" rx="58" fill="url(#vignette)"/>
   <rect x="4" y="4" width="248" height="248" rx="55" fill="none" stroke="url(#bevel)" stroke-width="3.5"/>
   </g>
-  <rect x="1.5" y="1.5" width="253" height="253" rx="56.5" fill="none" stroke="#0d9488" stroke-opacity="0.28" stroke-width="1.5"/>
+  <rect x="1.5" y="1.5" width="253" height="253" rx="56.5" fill="none" stroke="#d97706" stroke-opacity="0.30" stroke-width="1.5"/>
 </svg>

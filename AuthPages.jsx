@@ -16,17 +16,20 @@ function AuthShell({ children }) {
       <style>{`
         .auth-page {
           min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 24px;
-          background: radial-gradient(1100px 600px at 12% -10%, rgba(13,148,136,0.08), transparent 60%), #f6faf9;
-          font-family: 'Inter', system-ui, -apple-system, sans-serif; color: #0f1a18;
+          background:
+            radial-gradient(1100px 600px at 12% -10%, rgba(245,158,11,0.12), transparent 60%),
+            radial-gradient(900px 520px at 100% 0%, rgba(225,29,72,0.08), transparent 55%),
+            #fdf6ee;
+          font-family: 'Inter', system-ui, -apple-system, sans-serif; color: #1f1512;
         }
         .auth-card {
           width: 100%; max-width: 420px; text-align: center;
-          background: #fff; border: 1px solid rgba(15,26,24,0.10); border-radius: 18px;
-          padding: 34px 30px; box-shadow: 0 24px 60px rgba(15,26,24,0.10);
+          background: #fff; border: 1px solid rgba(60,30,20,0.10); border-radius: 18px;
+          padding: 34px 30px; box-shadow: 0 24px 60px rgba(60,30,20,0.10);
         }
         .auth-card img { display: block; margin: 0 auto 14px; }
         .auth-card h1 { font-size: 1.4rem; letter-spacing: -0.02em; margin: 0 0 6px; }
-        .ap-sub { color: #425551; font-size: 0.95rem; line-height: 1.55; margin: 0 0 18px; }
+        .ap-sub { color: #574640; font-size: 0.95rem; line-height: 1.55; margin: 0 0 18px; }
         .ap-badge {
           width: 46px; height: 46px; border-radius: 50%; margin: 0 auto 12px;
           display: flex; align-items: center; justify-content: center; font-size: 1.4rem; font-weight: 800;
@@ -35,23 +38,23 @@ function AuthShell({ children }) {
         .ap-badge.err { background: rgba(220,38,38,0.12); color: #dc2626; }
         .ap-btn {
           display: inline-block; width: 100%; padding: 12px 18px; border: none; border-radius: 12px;
-          background: #0d9488; color: #fff; font-weight: 700; font-size: 0.95rem; cursor: pointer;
+          background: #e11d48; color: #fff; font-weight: 700; font-size: 0.95rem; cursor: pointer;
           font-family: inherit; transition: background 0.15s ease;
         }
-        .ap-btn:hover:not(:disabled) { background: #0f766e; }
+        .ap-btn:hover:not(:disabled) { background: #be123c; }
         .ap-btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .ap-form { display: grid; gap: 10px; margin-top: 4px; text-align: left; }
-        .ap-form label { font-size: 0.82rem; font-weight: 600; color: #425551; display: grid; gap: 6px; }
+        .ap-form label { font-size: 0.82rem; font-weight: 600; color: #574640; display: grid; gap: 6px; }
         .ap-form input {
-          padding: 11px 13px; border-radius: 10px; border: 1px solid rgba(15,26,24,0.14);
-          font-family: inherit; font-size: 0.92rem; color: #0f1a18; background: #f6faf9;
+          padding: 11px 13px; border-radius: 10px; border: 1px solid rgba(60,30,20,0.14);
+          font-family: inherit; font-size: 0.92rem; color: #1f1512; background: #fdf6ee;
         }
-        .ap-form input:focus { outline: none; border-color: rgba(13,148,136,0.5); box-shadow: 0 0 0 3px rgba(13,148,136,0.25); }
+        .ap-form input:focus { outline: none; border-color: rgba(225,29,72,0.5); box-shadow: 0 0 0 3px rgba(225,29,72,0.25); }
         .ap-form .ap-btn { margin-top: 6px; }
         .ap-err { color: #dc2626; font-size: 0.85rem; margin: 10px 0 0; text-align: left; }
-        .ap-note { color: #0f766e; font-size: 0.85rem; margin: 12px 0 0; line-height: 1.5; }
-        .ap-link { background: none; border: none; color: #6b7d78; font-weight: 600; cursor: pointer; margin-top: 16px; font-size: 0.85rem; font-family: inherit; }
-        .ap-link:hover { color: #0f766e; }
+        .ap-note { color: #be123c; font-size: 0.85rem; margin: 12px 0 0; line-height: 1.5; }
+        .ap-link { background: none; border: none; color: #877069; font-weight: 600; cursor: pointer; margin-top: 16px; font-size: 0.85rem; font-family: inherit; }
+        .ap-link:hover { color: #be123c; }
       `}</style>
     </div>
   );

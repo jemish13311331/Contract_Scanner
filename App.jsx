@@ -35,6 +35,15 @@ import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import LegalPage from './LegalPages.jsx';
 import VerifyEmailPage, { ForgotPasswordPage, ResetPasswordPage } from './AuthPages.jsx';
+import { api as apiClient } from './src/lib/api.js';
+import {
+  DRAFT_KEY,
+  TYPE_KEY,
+  TOKEN_KEY,
+  safeLoad,
+  safeSave,
+  purgeLegacyStorage,
+} from './src/lib/storage.js';
 
 const featurePills = ['AI-powered review', 'Any contract type', 'Plain-English insights', 'Negotiation prompts'];
 
@@ -50,16 +59,11 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // Resolve a contract-type id (e.g. from persisted history) to its icon component.
 const iconForType = (id) => CONTRACT_TYPES.find((t) => t.id === id)?.Icon || DescriptionOutlinedIcon;
 
-const DRAFT_KEY = 'contract-scanner:draft';
-const TYPE_KEY = 'contract-scanner:type';
-const HISTORY_KEY = 'contract-scanner:history';
-const ACCOUNT_KEY = 'contract-scanner:account';
+// Storage keys + helpers live in src/lib/storage.js (localStorage holds only the
+// token, draft, and contract type). The api() client lives in src/lib/api.js.
 
 // How many saved-report cards to show per page in the home-page history grid.
 const HISTORY_PAGE_SIZE = 10;
-const ENTITLEMENT_KEY = 'contract-scanner:entitlement';
-const FREE_KEY = 'contract-scanner:freeUsed';
-const TOKEN_KEY = 'contract-scanner:token';
 
 const DEFAULT_ENTITLEMENT = { credits: 0, unlimitedUntil: null };
 
@@ -136,14 +140,6 @@ const entitlementFromServer = (u) => ({
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // mirrors the server's multer limit
 const ACCEPTED_FILE = /(pdf|text\/plain|wordprocessingml|^image\/)/i;
 
-const safeLoad = (key, fallback) => {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
-};
 const sampleLeaseText = `Landlord agrees to lease the dwelling to Tenant for a term of twelve months beginning July 1, 2026, through June 30, 2027. Tenant will pay monthly rent of $2,200 due on the first day of each month. Tenant is responsible for electricity, gas, water, and trash removal. Security deposit shall be one month's rent and may not be commingled with landlord funds. Landlord must provide at least 30 days written notice prior to non-renewal or rent increase. Tenant may terminate with 60 days written notice if the property becomes uninhabitable through no fault of the tenant. Landlord may not enter the property without 24 hours prior notice except in emergencies. All repairs requested in writing must be completed within 14 days or a reasonable time for emergency conditions. Subletting is permitted with prior written consent, which may not be unreasonably withheld.`;
 
 const sampleEmploymentText = `Employee is hired as a Senior Engineer at an annual salary of $145,000, paid semi-monthly. Employment is at-will and may be terminated by either party at any time, with or without cause or notice. Employee agrees not to engage in any competing business for a period of two years following termination, within any state in which the Company operates. All inventions, ideas, and works created during employment, whether or not during work hours, are the sole property of the Company. Employee shall not disclose confidential information indefinitely. Any dispute shall be resolved through binding arbitration, and Employee waives the right to a jury trial and to participate in any class action. Bonuses are discretionary and forfeited if Employee is not employed on the payout date. Unused paid time off is not paid out upon termination.`;
@@ -258,8 +254,8 @@ function PaymentForm({ plan, priceLabel, onPaid, onCancel }) {
 const LOADER_PX = { small: 18, medium: 28, large: 46 };
 function Loader({ size = 'medium', onAccent = false, label = 'Loading' }) {
   const px = LOADER_PX[size] || LOADER_PX.medium;
-  const track = onAccent ? 'rgba(255,255,255,0.35)' : 'rgba(13,148,136,0.16)';
-  const handle = onAccent ? '#ffffff' : '#0d9488';
+  const track = onAccent ? 'rgba(255,255,255,0.35)' : 'rgba(225,29,72,0.14)';
+  const handle = onAccent ? '#ffffff' : '#e11d48';
   const gid = onAccent ? null : `ldr-${size}`;
   return (
     <span className="app-loader" role="status" aria-label={label}>
@@ -267,8 +263,8 @@ function Loader({ size = 'medium', onAccent = false, label = 'Loading' }) {
         {gid && (
           <defs>
             <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#2dd4bf" />
-              <stop offset="100%" stopColor="#0d9488" />
+              <stop offset="0%" stopColor="#f59e0b" />
+              <stop offset="100%" stopColor="#e11d48" />
             </linearGradient>
           </defs>
         )}
@@ -289,7 +285,7 @@ export default function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [analysis, setAnalysis] = useState(null);
-  const [history, setHistory] = useState(() => safeLoad(HISTORY_KEY, []));
+  const [history, setHistory] = useState([]); // anonymous, in-memory only (signed-in reports come from /api/records)
   const [historyPage, setHistoryPage] = useState(1);
   const [expandedHistory, setExpandedHistory] = useState({}); // card id → verdict expanded?
   const [loading, setLoading] = useState(false);
@@ -297,10 +293,10 @@ export default function App() {
   const [copied, setCopied] = useState('');
 
   // --- Accounts & entitlements (server-enforced via JWT + Postgres) ---
-  const [user, setUser] = useState(() => safeLoad(ACCOUNT_KEY, null));
+  const [user, setUser] = useState(null); // populated from /api/me when a token is present
   const [token, setToken] = useState(() => safeLoad(TOKEN_KEY, null));
-  const [entitlement, setEntitlement] = useState(() => safeLoad(ENTITLEMENT_KEY, DEFAULT_ENTITLEMENT));
-  const [freeUsed, setFreeUsed] = useState(() => safeLoad(FREE_KEY, 0));
+  const [entitlement, setEntitlement] = useState(DEFAULT_ENTITLEMENT); // refreshed from /api/me
+  const [freeUsed, setFreeUsed] = useState(0); // server-authoritative for signed-in; session-only for anonymous
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState('signup');
   const [authForm, setAuthForm] = useState({ name: '', email: '', password: '' });
@@ -354,38 +350,23 @@ export default function App() {
 
   // Persist the selected contract type.
   useEffect(() => {
-    try {
-      localStorage.setItem(TYPE_KEY, JSON.stringify(contractType));
-    } catch {
-      /* non-fatal */
-    }
+    safeSave(TYPE_KEY, contractType);
   }, [contractType]);
 
   // Persist the in-progress draft so a refresh never loses the user's work.
   useEffect(() => {
-    try {
-      if (leaseText) localStorage.setItem(DRAFT_KEY, JSON.stringify(leaseText));
-      else localStorage.removeItem(DRAFT_KEY);
-    } catch {
-      /* storage unavailable (private mode) — non-fatal */
-    }
+    safeSave(DRAFT_KEY, leaseText); // '' clears the key
   }, [leaseText]);
 
-  // Persist report history across sessions — but ONLY for anonymous users, who
-  // have no server-side store. Signed-in users' reports live in /api/records, so
-  // we never write that API-sourced analysis data to localStorage; we also purge
-  // anything left there from before they signed in.
+  // Report history is never cached in localStorage. Signed-in users' reports
+  // live server-side (/api/records); anonymous history is kept in memory for the
+  // current session only.
+
+  // One-time cleanup: drop any legacy account/entitlement/history/free-trial
+  // data left in localStorage by older builds. Runs once on mount.
   useEffect(() => {
-    try {
-      if (token) {
-        localStorage.removeItem(HISTORY_KEY);
-      } else {
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-      }
-    } catch {
-      /* non-fatal */
-    }
-  }, [history, token]);
+    purgeLegacyStorage();
+  }, []);
 
   // Keep the history page in range as the list grows/shrinks (new analysis,
   // clear history, etc.). Clamps to the last valid page, minimum 1.
@@ -401,24 +382,12 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [copied]);
 
-  // Persist account, entitlement, and free-trial usage.
-  useEffect(() => {
-    try {
-      if (user) localStorage.setItem(ACCOUNT_KEY, JSON.stringify(user));
-      else localStorage.removeItem(ACCOUNT_KEY);
-    } catch {
-      /* non-fatal */
-    }
-  }, [user]);
+  // Account, entitlement, and free-trial usage are NOT persisted — they're
+  // fetched from the server (/api/me) whenever a token is present.
 
   // Persist the auth token.
   useEffect(() => {
-    try {
-      if (token) localStorage.setItem(TOKEN_KEY, JSON.stringify(token));
-      else localStorage.removeItem(TOKEN_KEY);
-    } catch {
-      /* non-fatal */
-    }
+    safeSave(TOKEN_KEY, token); // null clears the key
   }, [token]);
 
   // Fetch the Stripe publishable key so we can mount Elements.
@@ -504,22 +473,6 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(ENTITLEMENT_KEY, JSON.stringify(entitlement));
-    } catch {
-      /* non-fatal */
-    }
-  }, [entitlement]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(FREE_KEY, JSON.stringify(freeUsed));
-    } catch {
-      /* non-fatal */
-    }
-  }, [freeUsed]);
 
   // --- Entitlement helpers ---------------------------------------------------
   const unlimitedActive = !!entitlement.unlimitedUntil && entitlement.unlimitedUntil > Date.now();
@@ -797,22 +750,11 @@ export default function App() {
   // Pass { auth: false } for public endpoints, { token } to use a specific token,
   // and { raw: true } when the caller needs the Response to branch on status
   // codes itself (e.g. the 402/403 flows in auth, analyze, and billing).
-  const api = async (path, { method = 'GET', body, auth = true, token: tokenOverride, raw = false } = {}) => {
-    const headers = {};
-    const isJson = body !== undefined && !(body instanceof FormData);
-    if (isJson) headers['Content-Type'] = 'application/json';
-    const bearer = tokenOverride ?? (auth ? token : null);
-    if (bearer) headers.Authorization = `Bearer ${bearer}`;
-    const res = await fetch(path, {
-      method,
-      headers: Object.keys(headers).length ? headers : undefined,
-      body: body === undefined ? undefined : isJson ? JSON.stringify(body) : body,
-    });
-    if (raw) return res;
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || 'Request failed.');
-    return data;
-  };
+  // Thin wrapper over the shared api client (src/lib/api.js): supplies the
+  // current auth token by default, and preserves the existing call sites'
+  // { auth: false } / { token } options.
+  const api = (path, { auth = true, token: tokenOverride, ...opts } = {}) =>
+    apiClient(path, { ...opts, token: tokenOverride ?? (auth ? token : undefined) });
 
   // Fetch one page of saved reports. Kept separate from loadAccount so the pager
   // can reload just the list without re-fetching account stats/billing.
@@ -2095,9 +2037,9 @@ export default function App() {
                 appearance: {
                   theme: 'stripe',
                   variables: {
-                    colorPrimary: '#0d9488',
+                    colorPrimary: '#e11d48',
                     colorBackground: '#ffffff',
-                    colorText: '#0f1a18',
+                    colorText: '#1f1512',
                     borderRadius: '10px',
                     fontFamily: 'Inter, system-ui, sans-serif',
                   },
@@ -2149,39 +2091,42 @@ export default function App() {
            Design tokens
            ============================================================ */
         :root {
-          /* Accent — a confident teal. Soft/strong are darkened for AA text on light. */
-          --accent: #0d9488;
-          --accent-strong: #0f766e;
-          --accent-soft: #0f766e;   /* used as text on light surfaces — kept dark enough to read */
-          --accent-tint: rgba(13, 148, 136, 0.10);
-          --accent-line: rgba(13, 148, 136, 0.28);
-          --grad-brand: linear-gradient(135deg, #14b8a6, #0d9488);
+          /* Accent — a warm crimson brand with a gold partner (red + yellow theme).
+             Deliberately distinct from the severity --red so brand chrome never
+             reads as a "high risk" signal. Soft/strong darkened for AA text. */
+          --accent: #e11d48;
+          --accent-strong: #be123c;
+          --accent-soft: #be123c;   /* used as text on light surfaces — kept dark enough to read */
+          --accent-tint: rgba(225, 29, 72, 0.12);
+          --accent-line: rgba(225, 29, 72, 0.34);
+          --grad-brand: linear-gradient(135deg, #f59e0b, #e11d48);  /* gold → crimson */
 
-          /* Surfaces — off-white base, white cards, subtle cool-gray steps */
-          --bg: #f6faf9;
+          /* Surfaces — warm cream base, white cards, subtle amber-tinted steps */
+          --bg: #fdf6ee;
           --surface-1: #ffffff;
-          --surface-2: #f1f6f5;
-          --surface-3: #e6efec;
+          --surface-2: #fbeede;
+          --surface-3: #f6e2cf;
 
-          /* Hairlines & borders — dark ink at low alpha for light surfaces */
-          --line: rgba(15, 26, 24, 0.10);
-          --line-strong: rgba(15, 26, 24, 0.16);
+          /* Hairlines & borders — warm ink at low alpha for light surfaces */
+          --line: rgba(60, 30, 20, 0.10);
+          --line-strong: rgba(60, 30, 20, 0.16);
 
-          /* Text — 3-step ladder, each tuned for AA contrast on the light surfaces */
-          --text: #0f1a18;    /* primary — near-black ink, crisp headings/body */
-          --text-2: #425551;  /* secondary — comfortable for long copy */
-          --text-3: #6b7d78;  /* muted — captions/meta, still legible on surfaces */
+          /* Text — 3-step ladder, warm near-black, tuned for AA on the cream surfaces */
+          --text: #1f1512;    /* primary — warm near-black ink, crisp headings/body */
+          --text-2: #574640;  /* secondary — comfortable for long copy */
+          --text-3: #877069;  /* muted — captions/meta, still legible on surfaces */
 
-          /* Severity — darkened so text/icons read on light tint backgrounds */
+          /* Severity — darkened so text/icons read on light tint backgrounds.
+             Tints/lines pushed up for a more vivid green/amber/red read. */
           --red: #dc2626;
-          --red-bg: rgba(220, 38, 38, 0.10);
-          --red-line: rgba(220, 38, 38, 0.28);
+          --red-bg: rgba(220, 38, 38, 0.16);
+          --red-line: rgba(220, 38, 38, 0.42);
           --amber: #d97706;
-          --amber-bg: rgba(217, 119, 6, 0.12);
-          --amber-line: rgba(217, 119, 6, 0.30);
+          --amber-bg: rgba(217, 119, 6, 0.18);
+          --amber-line: rgba(217, 119, 6, 0.44);
           --green: #059669;
-          --green-bg: rgba(5, 150, 105, 0.10);
-          --green-line: rgba(5, 150, 105, 0.28);
+          --green-bg: rgba(5, 150, 105, 0.16);
+          --green-line: rgba(5, 150, 105, 0.42);
 
           /* Radii */
           --r-sm: 10px;
@@ -2189,12 +2134,12 @@ export default function App() {
           --r-lg: 20px;
           --r-xl: 26px;
 
-          /* Elevation — soft ink shadows for a light UI */
-          --shadow-sm: 0 1px 2px rgba(15, 26, 24, 0.06);
-          --shadow-md: 0 8px 24px rgba(15, 26, 24, 0.08);
-          --shadow-lg: 0 24px 60px rgba(15, 26, 24, 0.12);
+          /* Elevation — soft warm-ink shadows for a light UI */
+          --shadow-sm: 0 1px 2px rgba(60, 30, 20, 0.06);
+          --shadow-md: 0 8px 24px rgba(60, 30, 20, 0.08);
+          --shadow-lg: 0 24px 60px rgba(60, 30, 20, 0.12);
 
-          --ring: 0 0 0 3px rgba(13, 148, 136, 0.30);
+          --ring: 0 0 0 3px rgba(225, 29, 72, 0.35);
 
           /* Fluid spacing — scales smoothly with the viewport, no jumps */
           --space-shell-x: clamp(16px, 4vw, 48px);
@@ -2217,7 +2162,8 @@ export default function App() {
           margin: 0;
           font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           background:
-            radial-gradient(1100px 600px at 12% -10%, rgba(13, 148, 136, 0.07), transparent 60%),
+            radial-gradient(1100px 600px at 12% -10%, rgba(245, 158, 11, 0.12), transparent 60%),
+            radial-gradient(900px 520px at 100% 0%, rgba(225, 29, 72, 0.08), transparent 55%),
             var(--bg);
           color: var(--text);
           -webkit-font-smoothing: antialiased;
