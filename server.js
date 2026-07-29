@@ -1313,8 +1313,18 @@ if (existsSync(INDEX_HTML)) {
   // uncached by the fallback below so a new deploy is picked up immediately.
   app.use(express.static(DIST_DIR, { index: false, maxAge: '1y', etag: true }));
 
-  // SPA fallback: every other GET returns index.html for client-side routing.
-  app.get('*', (_req, res) => res.sendFile(INDEX_HTML));
+  // Public routes that `npm run prerender` snapshots to their own static HTML
+  // (dist/<route>/index.html). Serving those gives crawlers fully-rendered,
+  // keyword-rich pages instead of the empty SPA shell. Unknown routes fall back
+  // to index.html for client-side routing.
+  const PRERENDERED_ROUTES = new Set(['/privacy', '/terms']);
+  app.get('*', (req, res) => {
+    if (PRERENDERED_ROUTES.has(req.path)) {
+      const prerendered = path.join(DIST_DIR, req.path, 'index.html');
+      if (existsSync(prerendered)) return res.sendFile(prerendered);
+    }
+    res.sendFile(INDEX_HTML);
+  });
 
   console.log(`Serving SPA build from ${DIST_DIR}`);
 } else {

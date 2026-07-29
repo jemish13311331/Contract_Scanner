@@ -905,8 +905,8 @@ export default function App() {
       },
     }[view] || (view === '/'
       ? {
-          title: 'Contract Red-Flag Scanner — Leases, Employment, Property & More',
-          description: 'AI contract red-flag scanner for leases, employment offers, property purchase agreements, and any contract — plain-English risk analysis and negotiation prompts.',
+          title: 'AI Contract Review & Red-Flag Scanner for Leases, Job Offers & More',
+          description: 'Free AI contract review that scans leases, job offers, and purchase agreements for red flags — plain-English risk analysis, missing protections, and negotiation prompts. Paste text or upload a PDF.',
           canonical: `${SITE}/`,
           index: true,
         }
