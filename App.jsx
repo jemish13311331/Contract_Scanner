@@ -905,7 +905,7 @@ export default function App() {
       },
     }[view] || (view === '/'
       ? {
-          title: 'AI Contract Review & Red-Flag Scanner for Leases, Job Offers & More',
+          title: 'Contract Red-Flag Scanner — AI Lease & Contract Review',
           description: 'Free AI contract review that scans leases, job offers, and purchase agreements for red flags — plain-English risk analysis, missing protections, and negotiation prompts. Paste text or upload a PDF.',
           canonical: `${SITE}/`,
           index: true,
@@ -1958,6 +1958,63 @@ export default function App() {
           )}
         </section>
       ) : null}
+
+        {/* Crawlable, keyword-rich content — helps first-time visitors and SEO.
+            Static text (captured by the prerender). Mirrors the FAQ schema. */}
+        <section className="panel seo-content">
+          <div className="seo-block">
+            <p className="section-kicker">How it works</p>
+            <h2>AI contract review in three steps</h2>
+            <div className="seo-steps">
+              <div className="seo-step">
+                <span className="seo-step-n">1</span>
+                <h3>Paste or upload your contract</h3>
+                <p>Drop in a lease, job offer, or purchase agreement as text, or upload a PDF, DOCX, or scanned image — built-in OCR reads it either way.</p>
+              </div>
+              <div className="seo-step">
+                <span className="seo-step-n">2</span>
+                <h3>AI scans every clause for red flags</h3>
+                <p>Each clause is risk-scored red, yellow, or green, with a plain-English explanation of why it matters for your side of the deal.</p>
+              </div>
+              <div className="seo-step">
+                <span className="seo-step-n">3</span>
+                <h3>Get fixes and negotiation prompts</h3>
+                <p>See the missing protections a fair contract should include, plus ready-to-send lines to negotiate the risky terms.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="seo-block">
+            <p className="section-kicker">What we review</p>
+            <h2>Contracts this red-flag scanner checks</h2>
+            <p className="seo-lead">Whether you’re signing a rental, starting a new job, or buying a home, get a fast, plain-English risk report tailored to your side of the agreement.</p>
+            <ul className="seo-list">
+              <li><strong>Lease &amp; rental agreements</strong> — unfair fees, entry and privacy rights, deposit handling, automatic renewal, and early-termination traps.</li>
+              <li><strong>Employment offers &amp; contracts</strong> — non-competes, IP assignment, mandatory arbitration, severance, and equity vesting.</li>
+              <li><strong>Property purchase agreements</strong> — earnest money, contingencies, “as-is” clauses, closing costs, and default remedies.</li>
+              <li><strong>General contracts</strong> — liability caps, indemnification, auto-renewal, late fees, and one-sided terms.</li>
+            </ul>
+          </div>
+
+          <div className="seo-block">
+            <p className="section-kicker">FAQ</p>
+            <h2>Frequently asked questions</h2>
+            <div className="seo-faq">
+              <div className="seo-qa">
+                <h3>What is a contract red-flag scanner?</h3>
+                <p>It’s an AI tool that reads a contract and surfaces one-sided or risky clauses — such as auto-renewal, liability caps, indemnification, non-competes, and termination traps — in plain English, with the best points to negotiate.</p>
+              </div>
+              <div className="seo-qa">
+                <h3>What types of contracts can it review?</h3>
+                <p>Leases and rental agreements, employment offers and agreements, real-estate purchase and sale agreements, and any general contract. Paste the text or upload a PDF.</p>
+              </div>
+              <div className="seo-qa">
+                <h3>Is the analysis legal advice?</h3>
+                <p>No. The analysis is informational only and not legal advice. Confirm important terms with a licensed attorney before signing.</p>
+              </div>
+            </div>
+          </div>
+        </section>
       </>
       ) : null}
 
@@ -2466,6 +2523,57 @@ export default function App() {
         .disclaimer strong { color: var(--text); font-weight: 600; }
         .disclaimer a { color: var(--accent-soft); font-weight: 600; text-decoration: none; }
         .disclaimer a:hover { text-decoration: underline; }
+
+        /* ============================================================
+           SEO / informational content section
+           ============================================================ */
+        .seo-content {
+          border-radius: var(--r-xl);
+          padding: var(--space-panel);
+          margin-bottom: var(--gap-grid);
+          display: grid;
+          gap: var(--gap-section);
+        }
+        .seo-block h2 {
+          font-size: clamp(1.3rem, 1.1rem + 1vw, 1.7rem);
+          letter-spacing: -0.02em;
+          margin: 0 0 8px;
+        }
+        .seo-lead { color: var(--text-2); font-size: 1rem; line-height: 1.6; margin: 0 0 16px; max-width: 720px; }
+        .seo-steps {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: var(--gap-grid);
+          margin-top: 16px;
+        }
+        .seo-step {
+          padding: 20px;
+          border-radius: var(--r-lg);
+          background: var(--surface-2);
+          border: 1px solid var(--line);
+        }
+        .seo-step-n {
+          display: grid; place-items: center;
+          width: 34px; height: 34px; border-radius: 10px;
+          background: var(--accent); color: #fff; font-weight: 800; font-size: 1rem;
+          margin-bottom: 12px;
+        }
+        .seo-step h3 { font-size: 1.02rem; margin: 0 0 6px; }
+        .seo-step p { color: var(--text-2); font-size: 0.92rem; line-height: 1.55; margin: 0; }
+        .seo-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+        .seo-list li {
+          padding: 14px 16px; border-radius: var(--r-md);
+          background: var(--surface-2); border: 1px solid var(--line);
+          color: var(--text-2); font-size: 0.94rem; line-height: 1.55;
+        }
+        .seo-list li strong { color: var(--text); }
+        .seo-faq { display: grid; gap: 12px; margin-top: 16px; }
+        .seo-qa { padding: 16px 18px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line); }
+        .seo-qa h3 { font-size: 1rem; margin: 0 0 6px; }
+        .seo-qa p { color: var(--text-2); font-size: 0.92rem; line-height: 1.6; margin: 0; }
+        @media (max-width: 760px) {
+          .seo-steps { grid-template-columns: 1fr; }
+        }
 
         .site-footer {
           display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;

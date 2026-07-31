@@ -19,7 +19,7 @@ const page = await browser.newPage();
 await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 2 });
 await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle2' });
 await page.waitForSelector('.hero', { timeout: 15000 }).catch(() => {});
-await page.screenshot({ path: OUT });
+await page.screenshot({ path: OUT, fullPage: true });
 console.log('saved', OUT);
 await browser.close();
 server.close();

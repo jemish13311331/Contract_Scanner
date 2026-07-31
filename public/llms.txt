@@ -1,0 +1,21 @@
+# Contract Red-Flag Scanner
+
+> AI contract review that turns a dense lease, job offer, or purchase agreement into a plain-English, clause-by-clause risk report — flagging unfair or risky terms and suggesting how to negotiate them. Paste text or upload a PDF, DOCX, TXT, or image (OCR).
+
+## What it does
+
+- Reviews residential leases, employment/offer contracts, property purchase agreements, and general contracts.
+- Risk-scores each clause red (risky), yellow (worth negotiating), or green (standard).
+- Lists missing protections a fair contract should include and gives negotiation prompts.
+- Accepts pasted text or PDF/DOCX/TXT/image uploads (images use OCR).
+
+## Key pages
+
+- [Home](https://contractscanner.express/): analyze a contract and read the risk report.
+- [Privacy Policy](https://contractscanner.express/privacy): how data is collected, used, and protected.
+- [Terms of Service](https://contractscanner.express/terms): terms of use, including the informational-only disclaimer.
+
+## Notes
+
+- The analysis is informational only and is not legal advice. Confirm important terms with a licensed attorney before signing.
+- Common queries this tool answers: "contract red flag scanner", "AI contract review", "lease review", "review my job offer", "purchase agreement review", "review a contract before signing".
