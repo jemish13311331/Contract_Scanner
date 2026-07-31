@@ -1537,38 +1537,43 @@ export default function App() {
 
           <div className="pill-row">
             {featurePills.map((pill) => (
-              <span className="feature-pill" key={pill}>{pill}</span>
+              <span className="feature-pill" key={pill}>
+                <CheckCircleRoundedIcon className="pill-check" />
+                {pill}
+              </span>
             ))}
           </div>
         </div>
 
-        <div className="hero-card">
-          <div className="hero-card-header">
-            <span className="dot dot-blue" />
-            <span className="dot dot-purple" />
-            <span className="dot dot-cyan" />
+        {/* Decorative sample report — illustrates the output; hidden from
+            assistive tech so the fictional clauses aren't read as real data. */}
+        <aside className="hero-card" aria-hidden="true">
+          <div className="hc-top">
+            <span className="hc-file"><span className="hc-fileicon">PDF</span>lease-agreement.pdf</span>
+            <span className="hc-done"><CheckCircleRoundedIcon style={{ fontSize: 14 }} /> Analyzed</span>
           </div>
-          <div className="hero-card-body">
-            <div>
-              <p className="metric-label">Instant signal</p>
-              <p className="metric-value">Red-flag clauses, surfaced fast.</p>
+          <div className="hc-verdict">
+            <p className="hc-k">Overall verdict</p>
+            <p className="hc-v">Tenant-unfavorable — 3 clauses worth negotiating.</p>
+          </div>
+          <div className="hc-rows">
+            <div className="hc-row">
+              <span className="hc-pill red">Red</span>
+              <span className="hc-txt">Landlord entry without notice<small>Waives the 24-hour notice rule.</small></span>
             </div>
-            <div className="hero-card-grid">
-              <div className="mini-stat">
-                <strong>PDF</strong>
-                <span>Upload-ready</span>
-              </div>
-              <div className="mini-stat">
-                <strong>AI</strong>
-                <span>Clause review</span>
-              </div>
-              <div className="mini-stat">
-                <strong>Talk</strong>
-                <span>Negotiation lines</span>
-              </div>
+            <div className="hc-row">
+              <span className="hc-pill amber">Yellow</span>
+              <span className="hc-txt">Auto-renewal at market rate<small>Renews unless cancelled 60 days out.</small></span>
+            </div>
+            <div className="hc-row">
+              <span className="hc-pill green">Green</span>
+              <span className="hc-txt">Security deposit terms<small>Standard and fairly handled.</small></span>
             </div>
           </div>
-        </div>
+          <div className="hc-foot">
+            <WarningAmberOutlinedIcon style={{ fontSize: 15 }} /> 2 missing protections a fair lease should include.
+          </div>
+        </aside>
       </header>
 
       <section className="panel input-panel">
@@ -2248,7 +2253,30 @@ export default function App() {
         }
 
         /* Ambient — one quiet wash, no competing blobs */
-        .ambient { display: none; }
+        /* Soft animated color glows behind the shell — adds depth/motion. */
+        .ambient {
+          position: fixed;
+          z-index: 0;
+          border-radius: 50%;
+          filter: blur(80px);
+          pointer-events: none;
+          opacity: 0.5;
+        }
+        .ambient-one {
+          top: -150px; left: -130px; width: 520px; height: 520px;
+          background: radial-gradient(circle at 30% 30%, rgba(20, 184, 166, 0.55), transparent 70%);
+          animation: drift-a 20s ease-in-out infinite alternate;
+        }
+        .ambient-two {
+          top: -90px; right: -170px; width: 460px; height: 460px;
+          background: radial-gradient(circle at 60% 40%, rgba(13, 148, 136, 0.42), transparent 70%);
+          animation: drift-b 24s ease-in-out infinite alternate;
+        }
+        @keyframes drift-a { to { transform: translate3d(60px, 44px, 0) scale(1.08); } }
+        @keyframes drift-b { to { transform: translate3d(-52px, 32px, 0) scale(1.1); } }
+        @media (prefers-reduced-motion: reduce) {
+          .ambient-one, .ambient-two { animation: none; }
+        }
 
         /* ============================================================
            Typography primitives
@@ -2279,11 +2307,22 @@ export default function App() {
 
         .hero {
           display: grid;
-          grid-template-columns: 1.25fr 0.75fr;
+          grid-template-columns: 1.2fr 0.8fr;
+          align-items: center;
           gap: var(--gap-section);
           padding: var(--space-panel);
           border-radius: var(--r-xl);
           margin-bottom: var(--gap-grid);
+          overflow: hidden;
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.65), var(--surface-1));
+        }
+        /* Gradient accent bar across the top edge of the hero. */
+        .hero::before {
+          content: "";
+          position: absolute;
+          inset: 0 0 auto 0;
+          height: 4px;
+          background: var(--grad-brand);
         }
 
         .hero-copy h1 {
@@ -2311,69 +2350,74 @@ export default function App() {
         }
 
         .feature-pill {
-          padding: 7px 13px;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 7px 14px 7px 11px;
           border-radius: 999px;
-          background: var(--surface-2);
-          border: 1px solid var(--line);
-          color: var(--text-2);
+          background: var(--surface-1);
+          border: 1px solid var(--accent-line);
+          color: var(--accent-strong);
           font-size: 0.82rem;
-          font-weight: 500;
+          font-weight: 600;
         }
+        .pill-check { font-size: 15px !important; color: var(--accent); }
 
-        /* Hero side card */
+        /* Hero side card — a realistic sample analysis report */
         .hero-card {
           border-radius: var(--r-lg);
-          background: var(--surface-2);
+          background: var(--surface-1);
           border: 1px solid var(--line);
+          box-shadow: var(--shadow-lg);
           overflow: hidden;
+          transition: transform 0.25s ease, box-shadow 0.25s ease;
+        }
+        .hero-card:hover { transform: translateY(-3px); box-shadow: 0 30px 70px rgba(15, 26, 24, 0.16); }
+
+        .hc-top {
           display: flex;
-          flex-direction: column;
-        }
-
-        .hero-card-header {
-          display: flex;
-          gap: 7px;
-          padding: 16px 18px;
-          border-bottom: 1px solid var(--line);
-        }
-
-        .dot { width: 9px; height: 9px; border-radius: 999px; display: inline-block; }
-        .dot-blue { background: #cbd5d1; }
-        .dot-purple { background: #cbd5d1; }
-        .dot-cyan { background: var(--accent); }
-
-        .hero-card-body { padding: 22px; display: grid; gap: 18px; }
-
-        .metric-label {
-          margin: 0 0 6px;
-          font-size: 0.72rem;
-          text-transform: uppercase;
-          letter-spacing: 0.14em;
-          color: var(--text-3);
-        }
-
-        .metric-value {
-          margin: 0;
-          font-size: 1.1rem;
-          font-weight: 600;
-          color: var(--text);
-          line-height: 1.4;
-        }
-
-        .hero-card-grid { display: grid; gap: 8px; }
-
-        .mini-stat {
-          padding: 13px 15px;
-          border-radius: var(--r-sm);
-          background: var(--surface-3);
-          border: 1px solid var(--line);
-          display: flex;
-          justify-content: space-between;
           align-items: center;
+          justify-content: space-between;
+          padding: 13px 15px;
+          border-bottom: 1px solid var(--line);
+          background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+        }
+        .hc-file { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 0.9rem; }
+        .hc-fileicon {
+          width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
+          background: var(--accent-tint); color: var(--accent-strong); font-size: 0.62rem; font-weight: 800;
+        }
+        .hc-done {
+          display: inline-flex; align-items: center; gap: 4px;
+          font-size: 0.74rem; font-weight: 700; color: var(--green);
+          background: var(--green-bg); border: 1px solid var(--green-line); padding: 4px 9px; border-radius: 999px;
         }
 
-        .mini-stat strong { font-weight: 600; font-size: 0.92rem; }
-        .mini-stat span { color: var(--text-3); font-size: 0.85rem; }
+        .hc-verdict { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+        .hc-k { margin: 0 0 4px; font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); }
+        .hc-v { margin: 0; font-weight: 700; font-size: 1rem; line-height: 1.35; }
+
+        .hc-rows { padding: 8px; }
+        .hc-row { display: flex; align-items: flex-start; gap: 11px; padding: 10px; border-radius: 12px; }
+        .hc-row + .hc-row { margin-top: 2px; }
+        .hc-row:hover { background: var(--surface-2); }
+        .hc-pill {
+          flex: none; margin-top: 1px;
+          font-size: 0.64rem; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase;
+          padding: 5px 9px; border-radius: 8px;
+        }
+        .hc-pill.red { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-line); }
+        .hc-pill.amber { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-line); }
+        .hc-pill.green { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-line); }
+        .hc-txt { font-size: 0.9rem; color: var(--text); font-weight: 600; }
+        .hc-txt small { display: block; color: var(--text-3); font-size: 0.78rem; font-weight: 400; margin-top: 1px; }
+
+        .hc-foot {
+          display: flex; align-items: center; gap: 7px;
+          padding: 12px 16px; border-top: 1px solid var(--line);
+          color: var(--text-3); font-size: 0.8rem;
+        }
+        .hc-foot svg { color: var(--amber); }
 
         /* ============================================================
            Panels
