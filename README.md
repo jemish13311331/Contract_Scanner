@@ -57,6 +57,51 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the application design and
 
 ---
 
+## How the analysis works (map / reduce)
+
+Contracts are analyzed with a **map/reduce pipeline that preserves the exact
+clause wording** — clauses are never summarized before analysis, because for a
+red-flag tool the precise wording *is* the signal. This also lets the whole
+document be reviewed rather than a truncated prefix.
+
+**Map — analyze each block verbatim**
+
+- [`lib/chunk-text.js`](lib/chunk-text.js) → `chunkText()` splits the normalized
+  contract into ~12k-char blocks on sentence/word boundaries (never mid-word),
+  with a ~500-char overlap so a clause spanning a seam is still seen whole by at
+  least one block. Short contracts pass through as a single block.
+- [`server.js`](server.js) → `analyzeChunk()` runs the full risk-analysis prompt
+  on one block, **verbatim**, returning that block's clauses (plus a `truncated`
+  flag if the model hit its output limit).
+- `mapWithConcurrency()` runs the blocks in parallel with a bounded worker pool.
+
+**Reduce — merge and reconcile**
+
+- `mergeClauses()` removes the duplicates the overlap creates, keeping the more
+  severe risk level when two copies of a clause disagree.
+- `reduceAnalysis()` makes one whole-document pass over the merged clauses to
+  produce the document-wide *missing protections* and the overall verdict.
+- Orchestrated in the `POST /api/analyze` handler.
+
+**Why it's built this way**
+
+This removes the mechanical ways a clause can go unreported: the whole document
+reaches the model (no silent truncation past a length cap), boundary clauses
+aren't split, and nothing is paraphrased before it's scored. Chunker unit tests
+(boundary cuts, seam survival, no mid-word splits) live in
+[`test/chunk-text.test.mjs`](test/chunk-text.test.mjs).
+
+### Evaluation & limitations
+
+Precision (not over-flagging boilerplate) was tuned by hand against sample
+contracts. **Recall is not yet formally measured** — there is no labeled corpus,
+so the tool cannot yet quantify how often it *misses* a real red flag. The
+architecture addresses the mechanical recall failures above; model-level recall
+would need a planted-clause test harness and a small hand-labeled gold set,
+which are planned but not yet built.
+
+---
+
 ## Prerequisites
 
 - **Node.js 18+** (uses the built-in test runner and `node --watch`)
