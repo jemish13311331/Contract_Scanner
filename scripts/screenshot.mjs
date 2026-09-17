@@ -2,7 +2,8 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import puppeteer from 'puppeteer-coreß';
+import puppeteer from 'puppeteer-core';
+import chromium from "@sparticuz/chromium";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(__dirname, '..', 'dist');
@@ -14,7 +15,11 @@ app.use(express.static(DIST, { index: false }));
 app.get('*', (_req, res) => res.sendFile(path.join(DIST, 'index.html')));
 const server = app.listen(PORT);
 
-const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
+const browser = await puppeteer.launch({
+  args: chromium.args,
+  executablePath: await chromium.executablePath(),
+  headless: true,
+});
 const page = await browser.newPage();
 await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 2 });
 await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle2' });

@@ -15,6 +15,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import puppeteer from 'puppeteer-core';
+import chromium from "@sparticuz/chromium";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(__dirname, '..', 'dist');
@@ -34,8 +35,9 @@ app.get('*', (_req, res) => res.sendFile(INDEX));
 const server = app.listen(PORT);
 
 const browser = await puppeteer.launch({
-  headless: 'new',
-  args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  args: chromium.args,
+  executablePath: await chromium.executablePath(),
+  headless: true,
 });
 
 try {
