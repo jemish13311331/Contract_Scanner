@@ -14,7 +14,7 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(__dirname, '..', 'dist');
