@@ -22,6 +22,8 @@ import { Resend } from 'resend';
 import { OAuth2Client } from 'google-auth-library';
 import { query, withTransaction, dbHealthy } from './db/index.js';
 import { chunkTextWithLocations, MAX_LEASE_CHARS } from './lib/chunk-text.js';
+import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+import "pdfjs-dist/legacy/build/pdf.worker.mjs";
 
 dotenv.config();
 
@@ -997,7 +999,7 @@ const extractTextFromPdf = async (buffer) => {
   // Lazy-load: pdfjs touches DOMMatrix at import time. @napi-rs/canvas provides
   // that polyfill; loading here (not at top level) keeps a failure contained to
   // PDF requests instead of crashing the whole serverless function on cold start.
-  const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  
   const loadingTask = getDocument({ data: new Uint8Array(buffer) });
   const pdfDoc = await loadingTask.promise;
   try {
