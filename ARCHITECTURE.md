@@ -31,7 +31,7 @@ flowchart TB
         end
 
         subgraph Guard["Validation"]
-            COMPACT["compactLeaseText<br/>normalize · cap 18k chars"]
+        COMPACT["compactLeaseText<br/>normalize · cap 120k chars"]
             READABLE["looksLikeReadableText<br/>lease-term heuristic"]
         end
 
@@ -136,7 +136,7 @@ classDiagram
 | **Dev proxy** | Vite `server.proxy` | Forwards `/api` → `:4000` (avoids CORS in dev) |
 | **API** | Express 4 | Single `POST /api/analyze` endpoint |
 | **Uploads** | multer (memory, 15 MB) | Buffers file in RAM, no disk writes |
-| **PDF** | pdfjs-dist (legacy build) | Page-by-page text extraction |
+| **PDF** | pdfjs-dist + Tesseract fallback | Page-by-page text extraction; image-only PDFs are rendered and OCR'd (up to 30 pages by default) |
 | **DOCX** | mammoth | Raw text extraction |
 | **OCR** | tesseract.js + `eng.traineddata` | Image → text (lazy-initialized worker) |
 | **Validation** | custom heuristics | Normalize, cap 18k chars, reject non-lease content |
@@ -156,6 +156,6 @@ classDiagram
 ### Potential hardening (future)
 - API key only server-side ✅ — keep it that way; never expose to the client.
 - Add a request timeout / retry around the OpenAI `fetch`.
-- Consider streaming or chunking for leases beyond the 18k-char cap (currently truncated).
+- Consider a user-directed continuation flow for contracts beyond the 120k-character cap; the current report explicitly states the exact excluded tail length.
 - Persist history (localStorage or a DB) if cross-session history is desired.
 ```

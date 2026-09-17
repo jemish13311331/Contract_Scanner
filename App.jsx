@@ -1152,12 +1152,13 @@ export default function App() {
     lines.push('-'.repeat(40));
     analysis.clauses?.forEach((c, i) => {
       lines.push(`\nClause ${i + 1} [${(c.riskLevel || 'green').toUpperCase()}]`);
+      if (c.source?.pageLabel) lines.push(`Source: ${c.source.pageLabel}`);
       lines.push(c.text || '');
       if (c.summary) lines.push(`Why it matters: ${c.summary}`);
       if (c.negotiationScript) lines.push(`Negotiate: "${c.negotiationScript}"`);
     });
     if (analysis.missingProtections?.length) {
-      lines.push('\nMISSING PROTECTIONS');
+      lines.push('\nPROTECTIONS NOT LOCATED');
       lines.push('-'.repeat(40));
       analysis.missingProtections.forEach((m) => lines.push(`• ${m}`));
     }
@@ -1182,7 +1183,7 @@ export default function App() {
     const clauseHtml = (analysis.clauses || [])
       .map(
         (c, i) => `<div class="c ${c.riskLevel || 'green'}"><h3>Clause ${i + 1} · ${(c.riskLevel || 'green').toUpperCase()}</h3>
-        <p class="t">${esc(c.text)}</p>${c.summary ? `<p class="s">${esc(c.summary)}</p>` : ''}
+        ${c.source?.pageLabel ? `<p class="src">Source: ${esc(c.source.pageLabel)}</p>` : ''}<p class="t">${esc(c.text)}</p>${c.summary ? `<p class="s">${esc(c.summary)}</p>` : ''}
         ${c.negotiationScript ? `<p class="n"><b>Negotiate:</b> ${esc(c.negotiationScript)}</p>` : ''}</div>`
       )
       .join('');
@@ -1191,12 +1192,12 @@ export default function App() {
       <style>body{font:14px/1.6 -apple-system,system-ui,sans-serif;color:#111;max-width:680px;margin:32px auto;padding:0 20px}
       h1{font-size:22px;margin:0 0 4px}h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#666;margin:24px 0 8px}
       .c{border-left:4px solid #ccc;padding:8px 0 8px 14px;margin:12px 0}.c.red{border-color:#dc2626}.c.yellow{border-color:#d97706}.c.green{border-color:#16a34a}
-      .c h3{font-size:13px;margin:0 0 6px}.t{color:#333}.s{font-weight:600}.n{background:#f4f4f5;padding:8px 10px;border-radius:8px}
+      .c h3{font-size:13px;margin:0 0 6px}.src{font-size:12px;color:#666;margin:0 0 6px}.t{color:#333}.s{font-weight:600}.n{background:#f4f4f5;padding:8px 10px;border-radius:8px}
       ol,ul{padding-left:20px}small{color:#888}</style></head><body>
       <h1>${esc(typeLabel)} — Red-Flag Report</h1><small>${esc(analysis.overallSummary?.verdict || '')}</small>
       ${analysis.overallSummary?.topFixes?.length ? `<h2>Top fixes before signing</h2><ol>${analysis.overallSummary.topFixes.map((f) => `<li>${esc(f)}</li>`).join('')}</ol>` : ''}
       <h2>Clause-by-clause</h2>${clauseHtml}
-      ${analysis.missingProtections?.length ? `<h2>Missing protections</h2><ul>${analysis.missingProtections.map((m) => `<li>${esc(m)}</li>`).join('')}</ul>` : ''}
+      ${analysis.missingProtections?.length ? `<h2>Protections not located</h2><ul>${analysis.missingProtections.map((m) => `<li>${esc(m)}</li>`).join('')}</ul>` : ''}
       <p><small>Informational only, not legal advice.</small></p>
       <script>window.onload=()=>window.print()</script></body></html>`);
     win.document.close();
@@ -1603,7 +1604,7 @@ export default function App() {
             <div className="textarea-foot">
               <span className={leaseText.length > 120000 ? 'count over' : 'count'}>
                 {leaseText.length.toLocaleString()} chars
-                {leaseText.length > 120000 ? ' · only the first 120,000 are analyzed' : ''}
+                {leaseText.length > 120000 ? ' · only the first 120,000 normalized characters are analyzed' : ''}
               </span>
               <span className="kbd-hint"><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>Enter</kbd> to analyze</span>
             </div>
@@ -1739,10 +1740,18 @@ export default function App() {
 
       {analysis ? (
         <section className="panel result-panel" ref={resultsRef}>
+          {analysis.meta?.inputTruncated ? (
+            <div className="notice">
+              <WarningAmberOutlinedIcon fontSize="small" />
+              <span>
+                Only the first {Number(analysis.meta.analyzedCharCount || 0).toLocaleString()} of {Number(analysis.meta.inputCharCount || 0).toLocaleString()} normalized characters were analyzed. {Number(analysis.meta.excludedCharCount || 0).toLocaleString()} characters at the end were excluded.
+              </span>
+            </div>
+          ) : null}
           {analysis.meta?.truncated ? (
             <div className="notice">
               <WarningAmberOutlinedIcon fontSize="small" />
-              <span>This contract is very long, so one or more sections couldn’t be fully analyzed and a few clauses may be missing. For complete coverage, try running the affected section on its own.</span>
+              <span>{analysis.meta.coveragePercent}% of the contract completed after retrying {analysis.meta.retriedChunks || 0} section{analysis.meta.retriedChunks === 1 ? '' : 's'}. One or more sections could not be fully analyzed, so a few clauses may be missing.</span>
             </div>
           ) : null}
 
@@ -1816,6 +1825,7 @@ export default function App() {
                     <h3>Clause {index + 1}</h3>
                     {renderRiskLabel(clause.riskLevel)}
                   </div>
+                  {clause.source?.pageLabel ? <p className="clause-source">Source: {clause.source.pageLabel}</p> : null}
                   <p className="clause-text">{clause.text}</p>
                   <p className="clause-summary">{clause.summary}</p>
                   {clause.negotiationScript ? (
@@ -1843,7 +1853,7 @@ export default function App() {
             <div className="section-title-row">
               <div>
                 <p className="section-kicker">Protection Gap Review</p>
-                <h2>Missing protections</h2>
+                <h2>Protections not located</h2>
               </div>
             </div>
             {analysis.missingProtections?.length ? (
@@ -2870,6 +2880,7 @@ export default function App() {
         .clause-card h3 { margin: 0; font-size: 0.95rem; font-weight: 600; }
 
         .clause-text { margin: 0; color: var(--text-2); font-size: 0.9rem; line-height: 1.65; }
+        .clause-source { margin: 0; color: var(--text-3); font-size: 0.78rem; font-weight: 600; letter-spacing: 0.01em; }
         .clause-summary { margin: 0; font-weight: 500; color: var(--text); font-size: 0.92rem; line-height: 1.55; }
 
         .negotiation-block {

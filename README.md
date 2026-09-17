@@ -42,7 +42,7 @@ protections, an overall verdict, and negotiation prompts).
 | Backend    | Node.js + Express (`server.js`) |
 | Database   | PostgreSQL (`pg`) |
 | LLM        | OpenAI Chat Completions (`gpt-4.1-mini`) |
-| Extraction | `pdfjs-dist` (PDF), `mammoth` (DOCX), `tesseract.js` (image OCR) |
+| Extraction | `pdfjs-dist` (PDF text, with scanned-PDF OCR fallback), `mammoth` (DOCX), `tesseract.js` (image OCR) |
 | Auth       | `jsonwebtoken`, `bcryptjs`, `google-auth-library` |
 | Email      | Resend (verification & password-reset links) |
 | Payments   | Stripe |
@@ -73,6 +73,9 @@ document be reviewed rather than a truncated prefix.
 - [`server.js`](server.js) → `analyzeChunk()` runs the full risk-analysis prompt
   on one block, **verbatim**, returning that block's clauses (plus a `truncated`
   flag if the model hit its output limit).
+- Incomplete chunk responses are retried once with a concise recovery prompt.
+  A report is returned, saved, and charged only when at least 90% of chunk text
+  completed successfully (configurable with `MIN_ANALYSIS_COVERAGE_PERCENT`).
 - `mapWithConcurrency()` runs the blocks in parallel with a bounded worker pool.
 
 **Reduce — merge and reconcile**

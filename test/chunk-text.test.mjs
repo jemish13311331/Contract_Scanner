@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   chunkText,
+  chunkTextWithLocations,
   CHUNK_MAX_CHARS,
   CHUNK_OVERLAP,
   MAX_CHUNKS,
@@ -93,4 +94,16 @@ test('overlap is bounded and progress is always made', () => {
   const total = chunks.reduce((n, c) => n + c.length, 0);
   assert.ok(total >= text.length, 'covers all source chars');
   assert.ok(total <= text.length + chunks.length * CHUNK_OVERLAP, 'overlap bounded');
+});
+
+test('source locations point back to the exact normalized text', () => {
+  const text = 'The landlord may enter with notice. '.repeat(1000).trim();
+  const chunks = chunkTextWithLocations(text);
+
+  assert.ok(chunks.length > 1);
+  for (const chunk of chunks) {
+    assert.equal(text.slice(chunk.start, chunk.end), chunk.text);
+    assert.ok(chunk.start >= 0);
+    assert.ok(chunk.end <= text.length);
+  }
 });
